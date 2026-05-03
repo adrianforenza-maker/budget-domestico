@@ -771,7 +771,9 @@ async function driveUploadCSV() {
 
     const header = 'Data,Descrizione,Importo,Categoria,Note\n';
     const rows = records.map(r => {
-      const cat = (JSON.parse(localStorage.getItem(CAT_KEY)||'[]')).find(c=>c.ID===r.idCat);
+      const _cs = getCats();
+      const _ca = r.tipo==='sp' ? _cs.spese : _cs.entrate;
+      const cat = _ca.find(c=>c.ID===r.idCat);
       const catNome = cat ? cat.Nome : '';
       return [r.data, `"${(r.desc||'').replace(/"/g,'""')}"`, r.importo.toFixed(2), `"${catNome}"`, `"${(r.note||'').replace(/"/g,'""')}"`].join(',');
     }).join('\n');
@@ -1250,18 +1252,29 @@ function toggleDel(el) {
 
 function deleteRecord(e, localId, snapKey) {
   e.stopPropagation();
+  const DKEY = 'budget_deleted_log';
   if (localId) {
-    // Record locale mobile — elimina direttamente
+    const rec = getRecords().find(r => r.id === localId);
+    if (rec) {
+      const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
+      log.push({ tipo:rec.tipo, data:rec.data, desc:rec.desc||'', importo:rec.importo,
+                 idCat:rec.idCat, note:rec.note||'', deletedAt:new Date().toISOString() });
+      localStorage.setItem(DKEY, JSON.stringify(log));
+    }
     saveRecords(getRecords().filter(r => r.id !== localId));
     showToast('✓ Record eliminato');
     renderDashboard();
     if (currentPage === 'storico') renderStorico();
   } else if (snapKey) {
-    // Record snapshot PC — chiede conferma e lo nasconde localmente
-    if (!confirm('Nascondere questa transazione dallo snapshot?\n(non modifica i dati sul PC)')) return;
+    if (!confirm('Nascondere questa transazione?\n(verrà inclusa come cancellazione nel prossimo CSV)')) return;
     const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
     if (!hidden.includes(snapKey)) { hidden.push(snapKey); localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden)); }
-    showToast('✓ Transazione nascosta');
+    const parts = snapKey.split('|');
+    const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
+    log.push({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'', importo:parseFloat(parts[2])||0,
+               idCat:null, note:'', deletedAt:new Date().toISOString() });
+    localStorage.setItem(DKEY, JSON.stringify(log));
+    showToast('✓ Nascosto — incluso nel prossimo export CSV');
     renderDashboard();
     if (currentPage === 'storico') renderStorico();
   }
@@ -1786,15 +1799,24 @@ function exportCSV() {
     return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
   });
 
-  const csv  = [header, ...rows].join('\n');
-  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  // Aggiungi cancellazioni
+  const DKEY2 = 'budget_deleted_log';
+  const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]');
+  const delRows = delLog.map(d => {
+    const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
+    const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
+    return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
+  });
+
+  const csvFull = [header, ...rows, ...delRows].join('\n');
+  const blob = new Blob(['\uFEFF'+csvFull], {type:'text/csv;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  const ts   = now.toISOString().slice(0,10);
   a.href     = url;
-  a.download = `budget-iphone-${ts}.csv`;
+  a.download = `budget-iphone-${now.toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+  localStorage.removeItem(DKEY2);
 
   // Marca come esportati
   const updated = allRecords.map(r => {
@@ -1802,7 +1824,7 @@ function exportCSV() {
     return r;
   });
   saveRecords(updated);
-  showToast(`✓ ${records.length} record esportati`);
+  showToast(`✓ ${records.length} record esportati${delLog.length?' + '+delLog.length+' cancellaz.':''}`);
   renderExportStats();
 }
 
