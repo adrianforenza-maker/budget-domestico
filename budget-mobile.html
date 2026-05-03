@@ -769,16 +769,27 @@ async function driveUploadCSV() {
     const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
     const fileName = `budget-mobile-${dateStr}.csv`;
 
-    const header = 'Data,Descrizione,Importo,Categoria,Note\n';
+    // Header identico a exportCSV — compatibile con desktop processIphoneCSV
+    const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
+    const _catsD = getCats();
+    // Aggiungi anche righe CANCELLATO dal log
+    const DKEY3 = 'budget_deleted_log';
+    const delLogD = JSON.parse(localStorage.getItem(DKEY3)||'[]');
     const rows = records.map(r => {
-      const _cs = getCats();
-      const _ca = r.tipo==='sp' ? _cs.spese : _cs.entrate;
-      const cat = _ca.find(c=>c.ID===r.idCat);
-      const catNome = cat ? cat.Nome : '';
-      return [r.data, `"${(r.desc||'').replace(/"/g,'""')}"`, r.importo.toFixed(2), `"${catNome}"`, `"${(r.note||'').replace(/"/g,'""')}"`].join(',');
-    }).join('\n');
-    const csvContent = header + rows;
-    const csvBlob = new Blob([csvContent], {type: 'text/csv'});
+      const _arr = r.tipo==='sp' ? _catsD.spese : _catsD.entrate;
+      const cat = _arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
+      const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
+      const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
+      const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
+      return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
+    });
+    const delRowsD = delLogD.map(d => {
+      const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
+      const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
+      return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
+    });
+    const csvContent = [header, ...rows, ...delRowsD].join('\n');
+    const csvBlob = new Blob(['\uFEFF'+csvContent], {type: 'text/csv;charset=utf-8'});
 
     // Cerca file CSV esistente con stesso nome nella cartella
     const q = encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`);
@@ -808,11 +819,14 @@ async function driveUploadCSV() {
     });
     if (!uploadResp.ok) throw new Error('Upload fallito: ' + uploadResp.status);
 
-    // Marca come esportati
+    // Marca come esportati e svuota log cancellazioni
+    const DKEY3c = 'budget_deleted_log';
+    localStorage.removeItem(DKEY3c);
     const updated = allRecords.map(r => records.find(x=>x.id===r.id) ? {...r, exported:true} : r);
     localStorage.setItem(DB_KEY, JSON.stringify(updated));
     renderExportStats();
-    showToast(`✓ ${records.length} record inviati su Drive (${fileName})`, 'success');
+    const nDel = delLogD.length;
+    showToast(`✓ ${records.length} record + ${nDel} cancellaz. inviati su Drive`, 'success');
   } catch(e) {
     showToast('❌ Errore upload Drive: ' + e.message, 'error');
   } finally {
