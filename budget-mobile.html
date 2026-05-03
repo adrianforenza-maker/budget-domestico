@@ -798,26 +798,60 @@ async function driveUploadCSV() {
     });
     const searchData = await searchResp.json();
 
-    let uploadUrl, method;
+    // Costruisci multipart manuale (più compatibile con Safari/iOS)
+    const boundary = '-------314159265358979323846';
+    const buildMultipart = (metaObj, csvText) => {
+      const metaStr = JSON.stringify(metaObj);
+      const body = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        metaStr,
+        `--${boundary}`,
+        'Content-Type: text/csv; charset=UTF-8',
+        '',
+        csvText,
+        `--${boundary}--`
+      ].join('
+');
+      return body;
+    };
+
+    let uploadResp;
     if (searchData.files && searchData.files.length > 0) {
-      // Aggiorna file esistente
-      uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${searchData.files[0].id}?uploadType=multipart`;
-      method = 'PATCH';
+      // Aggiorna file esistente — NO parents nell'update
+      const existingId = searchData.files[0].id;
+      const body = buildMultipart({ name: fileName }, csvContent);
+      uploadResp = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${_driveToken}`,
+            'Content-Type': `multipart/related; boundary="${boundary}"`
+          },
+          body
+        }
+      );
     } else {
-      // Crea nuovo file
-      uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-      method = 'POST';
+      // Crea nuovo file — include parents
+      const body = buildMultipart({ name: fileName, parents: [folderId] }, csvContent);
+      uploadResp = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${_driveToken}`,
+            'Content-Type': `multipart/related; boundary="${boundary}"`
+          },
+          body
+        }
+      );
     }
-
-    const meta = { name: fileName, parents: [folderId] };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(meta)], {type:'application/json'}));
-    form.append('file', csvBlob);
-
-    const uploadResp = await fetch(uploadUrl, {
-      method, headers: { Authorization: `Bearer ${_driveToken}` }, body: form
-    });
-    if (!uploadResp.ok) throw new Error('Upload fallito: ' + uploadResp.status);
+    if (!uploadResp.ok) {
+      const errText = await uploadResp.text();
+      throw new Error(`Upload fallito: ${uploadResp.status} — ${errText.slice(0,120)}`);
+    }
 
     // Marca come esportati e svuota log cancellazioni
     const DKEY3c = 'budget_deleted_log';
