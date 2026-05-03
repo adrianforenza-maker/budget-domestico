@@ -245,15 +245,15 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
 .cat-chip .dot { width: 12px; height: 12px; border-radius: 50%; margin: 0 auto 5px; }
 .cat-chip .name { font-size: 10px; font-weight: 600; color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── SWIPE DELETE ── */
+/* ── DELETE BTN ── */
 .tx-item { position: relative; }
 .tx-delete-btn {
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  width: 28px; height: 28px; border-radius: 50%; background: rgba(240,86,106,.15);
-  border: 1px solid rgba(240,86,106,.3); color: var(--red);
-  font-size: 14px; cursor: pointer; display: none; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(240,86,106,.15); border: 1px solid rgba(240,86,106,.3);
+  color: var(--red); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
-.tx-item:hover .tx-delete-btn, .tx-item.show-del .tx-delete-btn { display: flex; }
 </style>
 </head>
 <body>
@@ -350,10 +350,7 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
 
   <div class="form-group">
     <label class="form-label">Categoria</label>
-    <div class="form-group">
-    <label class="form-label">Categoria</label>
     <select class="form-ctrl" id="cat-select" onchange="selectCat(parseInt(this.value))"></select>
-  </div>
   </div>
 
   <div class="form-group">
@@ -1850,7 +1847,19 @@ function showToast(msg) {
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
+function _migrateQuickItems() {
+  // Se localStorage è vuoto, controlla se ci sono quick salvate nello snap
+  const existing = JSON.parse(localStorage.getItem(QUICK_KEY)||'[]');
+  if (existing.length > 0) return; // già presenti, niente da fare
+  // Prova a recuperarle dallo snapshot già caricato
+  const snap = getSnapshot();
+  if (snap && snap.quickItems && snap.quickItems.length > 0) {
+    localStorage.setItem(QUICK_KEY, JSON.stringify(snap.quickItems));
+  }
+}
+
 function init() {
+  _migrateQuickItems();
   initMonth();
   document.getElementById('reg-data').value = today();
   renderDashboard();
