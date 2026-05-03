@@ -767,7 +767,8 @@ async function driveUploadCSV() {
 
     const now = new Date();
     const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
-    const fileName = `budget-mobile-${dateStr}.csv`;
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    const fileName = `budget-mobile-${dateStr}-${timeStr}.csv`;
 
     // Header identico a exportCSV — compatibile con desktop processIphoneCSV
     const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
@@ -791,14 +792,7 @@ async function driveUploadCSV() {
     const csvContent = [header, ...rows, ...delRowsD].join('\n');
     const csvBlob = new Blob(['\uFEFF'+csvContent], {type: 'text/csv;charset=utf-8'});
 
-    // Cerca file CSV esistente con stesso nome nella cartella
-    const q = encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`);
-    const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, {
-      headers: { Authorization: `Bearer ${_driveToken}` }
-    });
-    const searchData = await searchResp.json();
-
-    // Costruisci multipart manuale (più compatibile con Safari/iOS)
+    // Ogni upload crea sempre un file nuovo (nome con timestamp univoco)
     const boundary = '-------314159265358979323846';
     const buildMultipart = (metaObj, csvText) => {
       const metaStr = JSON.stringify(metaObj);
@@ -816,37 +810,18 @@ async function driveUploadCSV() {
       return body;
     };
 
-    let uploadResp;
-    if (searchData.files && searchData.files.length > 0) {
-      // Aggiorna file esistente — NO parents nell'update
-      const existingId = searchData.files[0].id;
-      const body = buildMultipart({ name: fileName }, csvContent);
-      uploadResp = await fetch(
-        `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`,
-        {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${_driveToken}`,
-            'Content-Type': `multipart/related; boundary="${boundary}"`
-          },
-          body
-        }
-      );
-    } else {
-      // Crea nuovo file — include parents
-      const body = buildMultipart({ name: fileName, parents: [folderId] }, csvContent);
-      uploadResp = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${_driveToken}`,
-            'Content-Type': `multipart/related; boundary="${boundary}"`
-          },
-          body
-        }
-      );
-    }
+    const body = buildMultipart({ name: fileName, parents: [folderId] }, csvContent);
+    const uploadResp = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${_driveToken}`,
+          'Content-Type': `multipart/related; boundary="${boundary}"`
+        },
+        body
+      }
+    );
     if (!uploadResp.ok) {
       const errText = await uploadResp.text();
       throw new Error(`Upload fallito: ${uploadResp.status} — ${errText.slice(0,120)}`);
