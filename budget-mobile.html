@@ -812,8 +812,7 @@ async function driveUploadCSV() {
         '',
         csvText,
         `--${boundary}--`
-      ].join('
-');
+      ].join('\r\n');
       return body;
     };
 
