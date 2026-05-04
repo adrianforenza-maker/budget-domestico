@@ -624,6 +624,73 @@ function _driveDoConnect() {
   client.requestAccessToken();
 }
 
+// ── Refresh automatico token silenzioso ────────────────────────
+// Restituisce una Promise con il token valido.
+// Se scaduto, tenta il rinnovo silenzioso (prompt:'none').
+// Se fallisce (richiede interazione), mostra il popup di login.
+function _driveEnsureToken() {
+  return new Promise((resolve, reject) => {
+    // Token ancora valido
+    const saved = localStorage.getItem('budget_drive_token');
+    if (saved) {
+      try {
+        const { token, exp } = JSON.parse(saved);
+        if (Date.now() < exp) { _driveToken = token; resolve(token); return; }
+      } catch(e) {}
+    }
+
+    // Token scaduto — tenta rinnovo silenzioso
+    if (!window._gisLoaded || !google?.accounts?.oauth2) {
+      reject(new Error('Librerie Google non disponibili')); return;
+    }
+
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: DRIVE_CLIENT_ID,
+      scope:     DRIVE_SCOPES,
+      prompt:    '',   // stringa vuota = silent refresh se sessione attiva
+      callback:  (resp) => {
+        if (resp.error) {
+          // Silent refresh fallito — serve interazione utente
+          reject(new Error('silent_refresh_failed'));
+        } else {
+          _driveSaveToken(resp.access_token, resp.expires_in);
+          _driveUpdateUI(true);
+          resolve(resp.access_token);
+        }
+      }
+    });
+    client.requestAccessToken({ prompt: '' });
+  });
+}
+
+// Wrapper: assicura token valido prima di eseguire operazione Drive
+// Se il refresh silenzioso fallisce, mostra il popup di login e riprova
+async function _driveWithToken(fn) {
+  try {
+    await _driveEnsureToken();
+    return await fn();
+  } catch(e) {
+    if (e.message === 'silent_refresh_failed' || !_driveToken) {
+      // Serve login interattivo — mostra popup
+      return new Promise((resolve, reject) => {
+        if (!google?.accounts?.oauth2) { reject(new Error('Librerie Google non disponibili')); return; }
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: DRIVE_CLIENT_ID,
+          scope:     DRIVE_SCOPES,
+          callback:  async (resp) => {
+            if (resp.error) { reject(new Error('Auth fallita: ' + resp.error)); return; }
+            _driveSaveToken(resp.access_token, resp.expires_in);
+            _driveUpdateUI(true);
+            try { resolve(await fn()); } catch(e2) { reject(e2); }
+          }
+        });
+        client.requestAccessToken();
+      });
+    }
+    throw e;
+  }
+}
+
 // ── Aggiorna UI ────────────────────────────────────────────────
 function _driveUpdateUI(connected) {
   const statusTxt  = document.getElementById('drive-status-txt');
@@ -683,10 +750,19 @@ async function _driveEnsureFolder() {
 
 // ── Carica snapshot da Drive (snapshot.json) ───────────────────
 async function driveLoadSnapshot() {
-  if (!_driveToken) { driveConnect(); return; }
   const btn = document.getElementById('drive-load-snap-btn');
   if (btn) btn.textContent = '⏳ Caricamento...';
   try {
+    // Auto-refresh token silenzioso
+    await _driveEnsureToken().catch(async () => {
+      await new Promise((res, rej) => {
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPES,
+          callback: (r) => { if (r.error) rej(r.error); else { _driveSaveToken(r.access_token, r.expires_in); _driveUpdateUI(true); res(); } }
+        });
+        client.requestAccessToken();
+      });
+    });
     // Cerca snapshot.json OVUNQUE su Drive, prende il più recente
     const q = encodeURIComponent(`name='snapshot.json' and trashed=false`);
     const resp = await fetch(
@@ -750,10 +826,20 @@ async function driveLoadSnapshot() {
 
 // ── Upload CSV su Drive ────────────────────────────────────────
 async function driveUploadCSV() {
-  if (!_driveToken) { showToast('⚠ Prima connetti Google Drive', 'error'); return; }
   const btn = document.getElementById('drive-upload-csv-btn');
   if (btn) btn.textContent = '⏳ Upload...';
   try {
+    await _driveEnsureToken().catch(async (e) => {
+      if (e.message === 'silent_refresh_failed' || !_driveToken) {
+        await new Promise((res, rej) => {
+          const client = google.accounts.oauth2.initTokenClient({
+            client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPES,
+            callback: (r) => { if (r.error) rej(r.error); else { _driveSaveToken(r.access_token, r.expires_in); _driveUpdateUI(true); res(); } }
+          });
+          client.requestAccessToken();
+        });
+      }
+    });
     const folderId = await _driveEnsureFolder();
     if (!folderId) { showToast('❌ Cartella Drive non trovata', 'error'); return; }
 
@@ -1287,6 +1373,7 @@ function deleteRecord(e, localId, snapKey) {
     showToast('✓ Record eliminato');
     renderDashboard();
     if (currentPage === 'storico') renderStorico();
+    if (currentPage === 'bilancio') renderBilancio();
   } else if (snapKey) {
     if (!confirm('Nascondere questa transazione?\n(verrà inclusa come cancellazione nel prossimo CSV)')) return;
     const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
@@ -1299,6 +1386,7 @@ function deleteRecord(e, localId, snapKey) {
     showToast('✓ Nascosto — incluso nel prossimo export CSV');
     renderDashboard();
     if (currentPage === 'storico') renderStorico();
+    if (currentPage === 'bilancio') renderBilancio();
   }
 }
 
