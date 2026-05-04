@@ -1780,13 +1780,23 @@ function _cleanLocalAfterSnapshot(snap) {
   // sono già stati assorbiti dal desktop
   const snapDate = snap.exportedAt ? snap.exportedAt.slice(0,10) : '1970-01-01';
 
-  // Strategia principale: se il record è stato esportato (exported=true)
-  // e la data del record è <= snapDate, il desktop lo ha già processato → rimuovi
-  // NON usiamo snap.recent perché contiene solo 30 record e causa falsi negativi
+  // Costruisci set di tutti i record presenti nello snapshot (data|desc|importo)
+  // Usa snap.recent per il match diretto — se il record locale è già nello snapshot
+  // significa che il desktop lo ha già processato → rimuovilo dal localStorage
+  const snapTxAll = snap.allRecords || snap.recent || [];
+  const snapKeySet = new Set(snapTxAll.map(r =>
+    `${r.data||r.Data}|${(r.desc||r.Descrizione||'').trim().toLowerCase()}|${parseFloat(r.importo||r.Importo||0).toFixed(2)}`
+  ));
+
   const cleaned = locals.filter(r => {
-    // Record esportato e data antecedente/uguale allo snapshot → già nel desktop → rimuovi
+    // Controlla se il record locale è già presente nello snapshot (confronto triplo)
+    const key = `${r.data}|${(r.desc||'').trim().toLowerCase()}|${parseFloat(r.importo||0).toFixed(2)}`;
+    if (snapKeySet.has(key)) return false; // già nello snapshot → rimuovi
+
+    // Fallback: record esportato con data <= snapDate → già processato dal desktop
     if (r.exported && r.data <= snapDate) return false;
-    // Record non esportato → nuovo, tienilo
+
+    // Record genuinamente nuovo (non ancora nello snapshot) → tienilo
     return true;
   });
 
