@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  body{font-family:sans-serif;text-align:center;padding:60px;background:#0d0f1a;color:#fff}
+  h2{color:#1ecf96}p{color:#9aa3c2}
+</style>
+</head><body>
+<h2>✓ Autorizzazione in corso…</h2>
+<p>Puoi chiudere questa finestra.</p>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const code   = params.get('code');
+  const state  = params.get('state');
+  const error  = params.get('error');
+
+  if (window.opener) {
+    window.opener.postMessage(
+      { type: 'drive_oauth_code', code, state, error },
+      window.location.origin
+    );
+    setTimeout(() => window.close(), 1000);
+  } else {
+    document.querySelector('h2').textContent = '⚠ Errore';
+    document.querySelector('p').textContent  = 'Apri questa pagina dal pulsante Drive nell\'app.';
+  }
+</script>
+</body></html>

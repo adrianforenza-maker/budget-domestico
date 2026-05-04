@@ -564,9 +564,21 @@ const DRIVE_FOLDER_NAME = 'BudgetDomestico';
 let _driveToken  = null;   // access token corrente
 let _driveReady  = false;  // gapi picker pronto
 
-// ── Inizializzazione GAPI (chiamata dagli script dinamici in fondo al body) ──
+// ── Inizializzazione GAPI ──────────────────────────────────────
 function _driveGapiLoaded() {
   try { gapi.load('picker', () => { window._driveReady = true; }); } catch(e) {}
+}
+
+// ── PKCE helpers ───────────────────────────────────────────────
+function _pkceMakeVerifier() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function _pkceChallenge(verifier) {
+  const enc  = new TextEncoder().encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', enc);
+  return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
 }
 
 // ── Gestione token ──────────────────────────────────────────────
@@ -576,116 +588,135 @@ function _driveRestoreToken() {
   try {
     const { token, exp } = JSON.parse(saved);
     if (Date.now() < exp) { _driveToken = token; _driveUpdateUI(true); }
-    else { localStorage.removeItem('budget_drive_token'); }
   } catch(e) {}
 }
 
-function _driveSaveToken(token, expiresIn) {
+function _driveSaveToken(token, expiresIn, refreshToken) {
   const exp = Date.now() + (expiresIn - 60) * 1000;
-  localStorage.setItem('budget_drive_token', JSON.stringify({ token, exp }));
+  const cur = (() => { try { return JSON.parse(localStorage.getItem('budget_drive_token')||'{}'); } catch(e){return{};} })();
+  const obj = { token, exp, refreshToken: refreshToken || cur.refreshToken || null };
+  localStorage.setItem('budget_drive_token', JSON.stringify(obj));
   _driveToken = token;
 }
 
-// ── Login OAuth con Google Identity Services ────────────────────
-function driveConnect() {
-  if (!window._gisLoaded || typeof google === 'undefined' || !google?.accounts?.oauth2) {
-    // Prova a ricaricare se non ancora pronto
-    showToast('⏳ Caricamento librerie Google in corso…');
-    let attempts = 0;
-    const retry = setInterval(() => {
-      attempts++;
-      if (window._gisLoaded && google?.accounts?.oauth2) {
-        clearInterval(retry);
-        _driveDoConnect();
-      } else if (attempts > 20) {
-        clearInterval(retry);
-        showToast('❌ Impossibile caricare le librerie Google. Controlla la connessione.', 'error');
-      }
-    }, 500);
-    return;
-  }
-  _driveDoConnect();
-}
-
-function _driveDoConnect() {
-  const client = google.accounts.oauth2.initTokenClient({
-    client_id: DRIVE_CLIENT_ID,
-    scope:     DRIVE_SCOPES,
-    callback:  (resp) => {
-      if (resp.error) { showToast('❌ Autorizzazione Google fallita: ' + resp.error, 'error'); return; }
-      _driveSaveToken(resp.access_token, resp.expires_in);
-      _driveUpdateUI(true);
-      showToast('✓ Connesso a Google Drive!', 'success');
-      _driveEnsureFolder().then(() => {
-        showToast('📁 Cartella BudgetDomestico pronta', 'success');
-      });
-    }
-  });
-  client.requestAccessToken();
-}
-
-// ── Refresh automatico token silenzioso ────────────────────────
-// Restituisce una Promise con il token valido.
-// Se scaduto, tenta il rinnovo silenzioso (prompt:'none').
-// Se fallisce (richiede interazione), mostra il popup di login.
-function _driveEnsureToken() {
-  return new Promise((resolve, reject) => {
-    // Token ancora valido
-    const saved = localStorage.getItem('budget_drive_token');
-    if (saved) {
-      try {
-        const { token, exp } = JSON.parse(saved);
-        if (Date.now() < exp) { _driveToken = token; resolve(token); return; }
-      } catch(e) {}
-    }
-
-    // Token scaduto — tenta rinnovo silenzioso
-    if (!window._gisLoaded || !google?.accounts?.oauth2) {
-      reject(new Error('Librerie Google non disponibili')); return;
-    }
-
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: DRIVE_CLIENT_ID,
-      scope:     DRIVE_SCOPES,
-      prompt:    '',   // stringa vuota = silent refresh se sessione attiva
-      callback:  (resp) => {
-        if (resp.error) {
-          // Silent refresh fallito — serve interazione utente
-          reject(new Error('silent_refresh_failed'));
-        } else {
-          _driveSaveToken(resp.access_token, resp.expires_in);
-          _driveUpdateUI(true);
-          resolve(resp.access_token);
+// ── PKCE Login (prima connessione) ─────────────────────────────
+async function driveConnect() {
+  const saved = localStorage.getItem('budget_drive_token');
+  if (saved) {
+    try {
+      const { token, exp, refreshToken } = JSON.parse(saved);
+      if (Date.now() < exp) {
+        if (confirm('Disconnettersi da Google Drive?')) {
+          localStorage.removeItem('budget_drive_token');
+          _driveToken = null;
+          _driveUpdateUI(false);
         }
+        return;
       }
-    });
-    client.requestAccessToken({ prompt: '' });
-  });
+    } catch(e) {}
+  }
+
+  const verifier   = _pkceMakeVerifier();
+  const challenge  = await _pkceChallenge(verifier);
+  const state      = _pkceMakeVerifier().slice(0, 16);
+  const redirectUri = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'oauth-callback.html';
+
+  // Salva verifier per il callback
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('pkce_state',    state);
+
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authUrl.searchParams.set('client_id',             DRIVE_CLIENT_ID);
+  authUrl.searchParams.set('redirect_uri',          redirectUri);
+  authUrl.searchParams.set('response_type',         'code');
+  authUrl.searchParams.set('scope',                 DRIVE_SCOPES);
+  authUrl.searchParams.set('state',                 state);
+  authUrl.searchParams.set('code_challenge',        challenge);
+  authUrl.searchParams.set('code_challenge_method', 'S256');
+  authUrl.searchParams.set('access_type',           'offline');
+  authUrl.searchParams.set('prompt',                'consent');
+
+  // Apri popup OAuth
+  const popup = window.open(authUrl.toString(), 'driveAuth',
+    'width=480,height=640,left=100,top=100');
+
+  // Ascolta messaggio dal callback
+  const handler = async (ev) => {
+    if (ev.origin !== window.location.origin) return;
+    if (ev.data?.type !== 'drive_oauth_code') return;
+    window.removeEventListener('message', handler);
+    if (popup && !popup.closed) popup.close();
+
+    if (ev.data.error) { showToast('❌ Auth fallita: ' + ev.data.error, 'error'); return; }
+    if (ev.data.state !== state) { showToast('❌ State mismatch — riprova', 'error'); return; }
+
+    // Scambia code con tokens
+    try {
+      const resp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code:          ev.data.code,
+          client_id:     DRIVE_CLIENT_ID,
+          redirect_uri:  redirectUri,
+          grant_type:    'authorization_code',
+          code_verifier: verifier
+        }).toString()
+      });
+      const tokens = await resp.json();
+      if (tokens.access_token) {
+        _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token);
+        _driveUpdateUI(true);
+        showToast('✓ Connesso a Google Drive!', 'success');
+        _driveEnsureFolder();
+      } else {
+        showToast('❌ Token non ricevuto: ' + (tokens.error||'unknown'), 'error');
+      }
+    } catch(e) { showToast('❌ Errore connessione: ' + e.message, 'error'); }
+  };
+  window.addEventListener('message', handler);
 }
 
-// Wrapper: assicura token valido prima di eseguire operazione Drive
-// Se il refresh silenzioso fallisce, mostra il popup di login e riprova
+// ── Rinnovo silenzioso con refresh token (PKCE) ────────────────
+async function _driveEnsureToken() {
+  const saved = localStorage.getItem('budget_drive_token');
+  if (!saved) throw new Error('not_connected');
+  const { token, exp, refreshToken } = JSON.parse(saved);
+
+  // Token ancora valido (>2 min)
+  if (Date.now() < exp - 120000) { _driveToken = token; return token; }
+
+  // Token scaduto — rinnovo silenzioso con refresh token
+  if (!refreshToken) throw new Error('no_refresh_token');
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id:     DRIVE_CLIENT_ID,
+      grant_type:    'refresh_token'
+    }).toString()
+  });
+  const tokens = await resp.json();
+  if (tokens.access_token) {
+    _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+    return tokens.access_token;
+  }
+  throw new Error('refresh_failed: ' + (tokens.error||'unknown'));
+}
+
+// Wrapper: assicura token valido, se fallisce chiede login
 async function _driveWithToken(fn) {
   try {
     await _driveEnsureToken();
     return await fn();
   } catch(e) {
-    if (e.message === 'silent_refresh_failed' || !_driveToken) {
-      // Serve login interattivo — mostra popup
-      return new Promise((resolve, reject) => {
-        if (!google?.accounts?.oauth2) { reject(new Error('Librerie Google non disponibili')); return; }
-        const client = google.accounts.oauth2.initTokenClient({
-          client_id: DRIVE_CLIENT_ID,
-          scope:     DRIVE_SCOPES,
-          callback:  async (resp) => {
-            if (resp.error) { reject(new Error('Auth fallita: ' + resp.error)); return; }
-            _driveSaveToken(resp.access_token, resp.expires_in);
-            _driveUpdateUI(true);
-            try { resolve(await fn()); } catch(e2) { reject(e2); }
-          }
-        });
-        client.requestAccessToken();
-      });
+    if (['not_connected','no_refresh_token','refresh_failed'].some(s => e.message?.startsWith(s))) {
+      showToast('🔑 Sessione Drive scaduta — riconnetti', 'error');
+      _driveUpdateUI(false);
+      driveConnect();
+      return;
     }
     throw e;
   }
