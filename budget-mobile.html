@@ -1385,35 +1385,19 @@ function renderDashboard() {
   });
 
   // Prendi transazioni snap del mese (o tutte se è il mese corrente dello snap)
-  // Normalizza hidden_snap con toFixed(2) per match corretto (inclusi record post-datati)
   const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  // Costruisci set normalizzato delle chiavi nascoste
-  const hiddenSnapNorm = new Set(hiddenSnapDash.map(k => {
-    const p = k.split('|');
-    return `${p[0]}|${(p[1]||'').trim().toLowerCase()}|${parseFloat(p[2]||0).toFixed(2)}`;
-  }));
-  const _isHidden = r => hiddenSnapNorm.has(
-    `${r.data}|${(r.desc||'').trim().toLowerCase()}|${parseFloat(r.importo||0).toFixed(2)}`
-  );
   let snapTx = [];
   if (snap) {
     snapTx = (snap.recent||[])
       .filter(r => r.data && r.data.startsWith(currentMonth))
-      .filter(r => !_isHidden(r));
+      .filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+r.importo));
     if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
-      snapTx = (snap.recent||[]).filter(r => !_isHidden(r));
+      snapTx = (snap.recent||[]).filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+r.importo));
   }
 
-  // Deduplicazione: rimuovi dai locali quelli già presenti nello snap O nascosti
-  const snapKeys = new Set(snapTx.map(r =>
-    `${r.data}|${(r.desc||'').trim().toLowerCase()}|${parseFloat(r.importo||0).toFixed(2)}`
-  ));
-  const localDeduped = localForDisplay.filter(r => {
-    const k = `${r.data}|${(r.desc||'').trim().toLowerCase()}|${parseFloat(r.importo||0).toFixed(2)}`;
-    if (snapKeys.has(k)) return false;     // già nello snap visibile
-    if (hiddenSnapNorm.has(k)) return false; // è un record snap nascosto → non mostrare
-    return true;
-  });
+  // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
+  const snapKeys = new Set(snapTx.map(r => `${r.data}|${r.desc}|${r.importo}`));
+  const localDeduped = localForDisplay.filter(r => !snapKeys.has(`${r.data}|${r.desc}|${r.importo}`));
 
   const allTx = [...snapTx, ...localDeduped]
     .sort((a,b) => b.data.localeCompare(a.data))
@@ -1808,6 +1792,10 @@ function getSnapshot() {
 // - Record locale = "genuinamente nuovo" se la sua data è POSTERIORE all'ultima data nello snapshot
 //   oppure se non compare mai nello snapshot (non ancora esportato)
 function _cleanLocalAfterSnapshot(snap) {
+  // Svuota hidden_snap — se lo snapshot è aggiornato, i record cancellati
+  // non ci sono già più. Tenere hidden_snap causa bilancio sbagliato.
+  localStorage.removeItem('budget_hidden_snap');
+
   const locals = getRecords();
   if (!locals.length) return;
 
