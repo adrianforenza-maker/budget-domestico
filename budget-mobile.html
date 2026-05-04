@@ -938,21 +938,13 @@ async function driveAutoSync() {
   try {
     // 1. Carica snapshot aggiornato dal Drive
     await driveLoadSnapshot();
-    // 2. Controlla record non esportati E cancellazioni pendenti
+    // 2. Se ci sono spese non esportate, chiedi se uploadare
     const allRecords = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
-    const toExport   = allRecords.filter(r => !r.exported);
-    const delLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
-    const hasData    = toExport.length > 0 || delLog.length > 0;
-    if (hasData) {
-      let msg = '✓ Snapshot aggiornato!\n\n';
-      if (toExport.length > 0) msg += `• ${toExport.length} spese da inviare\n`;
-      if (delLog.length > 0)   msg += `• ${delLog.length} cancellazioni da propagare\n`;
-      msg += '\nVuoi caricarli su Drive adesso?';
-      if (confirm(msg)) {
+    const toExport = allRecords.filter(r => !r.exported);
+    if (toExport.length > 0) {
+      if (confirm(`✓ Snapshot aggiornato!\n\nHai ${toExport.length} spese non ancora inviate al PC.\nVuoi caricarle su Drive adesso?`)) {
         await driveUploadCSV();
       }
-    } else {
-      showToast('✓ Snapshot aggiornato — nessun dato da inviare');
     }
   } finally {
     if (btn) { btn.textContent = '☁ Drive'; btn.disabled = false; }
@@ -1779,6 +1771,31 @@ function _cleanLocalAfterSnapshot(snap) {
   if (cleaned.length !== locals.length) {
     saveRecords(cleaned);
     console.log(`[merge] Rimossi ${locals.length - cleaned.length} record già assorbiti (exported + data <= ${snapDate})`);
+  }
+
+  // Pulisci budget_hidden_snap: rimuovi chiavi di record non più presenti nello snapshot
+  // Quando il desktop cancella un record e rifà lo snapshot, quel record sparisce dallo snap.
+  // Se la chiave rimane in hidden_snap, il bilancio lo sottrae di nuovo causando importo errato.
+  const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  if (hidden.length) {
+    // Costruisci set di tutte le chiavi data|desc|importo presenti nello snapshot
+    const snapAllTx = snap.allRecords || snap.recent || [];
+    // Aggiungi anche chiavi dai dati mensili aggregati (snap.months non ha dettaglio tx)
+    const snapKeySet = new Set(snapAllTx.map(r =>
+      `${r.data||r.Data}|${(r.desc||r.Descrizione||'').trim().toLowerCase()}|${parseFloat(r.importo||r.Importo||0).toFixed(2)}`
+    ));
+    // Mantieni solo le chiavi hidden che sono ancora presenti nello snapshot
+    // (quelle non più presenti sono già state cancellate sul desktop)
+    const cleanedHidden = hidden.filter(key => {
+      const parts = key.split('|');
+      if (parts.length < 3) return false;
+      const normalizedKey = `${parts[0]}|${(parts[1]||'').trim().toLowerCase()}|${parseFloat(parts[2]||0).toFixed(2)}`;
+      return snapKeySet.has(normalizedKey);
+    });
+    if (cleanedHidden.length !== hidden.length) {
+      localStorage.setItem('budget_hidden_snap', JSON.stringify(cleanedHidden));
+      console.log(`[merge] Pulite ${hidden.length - cleanedHidden.length} chiavi hidden non più nello snapshot`);
+    }
   }
 }
 
