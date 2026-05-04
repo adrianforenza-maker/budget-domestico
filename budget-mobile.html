@@ -1087,16 +1087,13 @@ function renderBilancio() {
   // Sottrai hidden_snap dai months: record nascosti su mobile ma ancora nello snapshot
   // Usa i months direttamente (sempre completi) invece di snap.recent (solo 30 record)
   const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  console.log('[DEBUG hidden_snap]', hiddenSnapBil);
   const months = snap.months.map(m => {
     const mCopy = {...m};
     hiddenSnapBil.forEach(key => {
       const parts = key.split('|');
-      console.log('[DEBUG] key:', key, 'ym:', m.ym, 'match:', (parts[0]||'').startsWith(m.ym));
       if (!(parts[0]||'').startsWith(m.ym)) return;
       const imp = parseFloat(parts[2]||0) || 0;
       if (imp <= 0) return;
-      console.log('[DEBUG] sottraendo', imp, 'da', m.ym, 'spese era', mCopy.spese);
       mCopy.spese = Math.max(0, (mCopy.spese||0) - imp);
       mCopy.saldo = (mCopy.entrate||0) - mCopy.spese;
       if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
@@ -1803,22 +1800,20 @@ function _cleanLocalAfterSnapshot(snap) {
   const snapDate = snap.exportedAt ? snap.exportedAt.slice(0,10) : '1970-01-01';
 
   // Costruisci set di tutti i record presenti nello snapshot (data|desc|importo)
-  // Usa snap.recent per il match diretto — se il record locale è già nello snapshot
-  // significa che il desktop lo ha già processato → rimuovilo dal localStorage
   const snapTxAll = snap.allRecords || snap.recent || [];
   const snapKeySet = new Set(snapTxAll.map(r =>
     `${r.data||r.Data}|${(r.desc||r.Descrizione||'').trim().toLowerCase()}|${parseFloat(r.importo||r.Importo||0).toFixed(2)}`
   ));
 
   const cleaned = locals.filter(r => {
-    // Controlla se il record locale è già presente nello snapshot (confronto triplo)
+    // 1. Record già esportato → il desktop lo ha processato → rimuovi sempre
+    if (r.exported) return false;
+
+    // 2. Record presente nello snapshot → già nel desktop → rimuovi
     const key = `${r.data}|${(r.desc||'').trim().toLowerCase()}|${parseFloat(r.importo||0).toFixed(2)}`;
-    if (snapKeySet.has(key)) return false; // già nello snapshot → rimuovi
+    if (snapKeySet.has(key)) return false;
 
-    // Fallback: record esportato con data <= snapDate → già processato dal desktop
-    if (r.exported && r.data <= snapDate) return false;
-
-    // Record genuinamente nuovo (non ancora nello snapshot) → tienilo
+    // 3. Record genuinamente nuovo non ancora esportato → tienilo
     return true;
   });
 
