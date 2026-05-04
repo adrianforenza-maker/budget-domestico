@@ -1367,12 +1367,18 @@ function renderDashboard() {
   if (!allTx.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>';
   } else {
-    el.innerHTML = allTx.map(r => {
+    // Salva riferimento agli snapTx per deleteRecord via indice (evita problemi con apici/virgolette)
+    window._snapTxCache = snapTx;
+    el.innerHTML = allTx.map((r, idx) => {
       const sign = r.tipo==='spesa' ? '-' : '+';
       const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
       const mobileBadge = r._local
         ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
-      const deleteBtn = `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._local ? r._id : ''}','${r._local ? '' : (r.data+'|'+r.desc+'|'+r.importo)}')" style="${r._local?'':'opacity:.6'}">✕</button>`;
+      // Per i record snap usiamo l'indice nel cache, non la stringa con caratteri speciali
+      const snapIdx = r._local ? -1 : snapTx.findIndex(s => s.data===r.data && s.desc===r.desc && s.importo===r.importo);
+      const deleteBtn = r._local
+        ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
+        : `<button class="tx-delete-btn" onclick="deleteSnapRecord(event,${snapIdx})" style="opacity:.6">✕</button>`;
       return `<div class="tx-item" onclick="toggleDel(this)">
         <div class="tx-dot" style="background:${r.catColore||'#9aa3c2'}"></div>
         <div class="tx-info">
@@ -1407,6 +1413,27 @@ function _refreshCurrentPage() {
   if (currentPage === 'storico')   renderStorico();
   if (currentPage === 'bilancio')  renderBilancio();
   if (currentPage === 'spese-rapide') renderQuick();
+}
+
+function deleteSnapRecord(e, snapIdx) {
+  e.stopPropagation();
+  const cache = window._snapTxCache || [];
+  const r = cache[snapIdx];
+  if (!r) { showToast('⚠ Record non trovato'); return; }
+  if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
+  const key    = r.data + '|' + r.desc + '|' + r.importo;
+  const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  if (!hidden.includes(key)) {
+    hidden.push(key);
+    localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
+  }
+  const DKEY = 'budget_deleted_log';
+  const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
+  log.push({ tipo: r.tipo==='spesa'?'sp':'en', data:r.data, desc:r.desc||'',
+             importo:r.importo, idCat:null, note:'', deletedAt:new Date().toISOString() });
+  localStorage.setItem(DKEY, JSON.stringify(log));
+  showToast('✓ Transazione nascosta');
+  _refreshCurrentPage();
 }
 
 function deleteRecord(e, localId, snapKey) {
