@@ -1084,10 +1084,23 @@ function renderBilancio() {
   let modo   = localStorage.getItem('bilModoEntrate') || snap.modoEntrate || 'prec';
 
   // ── Fondi snapshot + record locali ──────────────────────────
-  // I totali in snap.months vengono già dal desktop (fonte di verità) — non sottrarre hidden_snap
-  // perché se il record è stato cancellato sul desktop, snap.months è già corretto senza di esso.
-  // Sottrarlo di nuovo causerebbe un doppio conteggio negativo.
-  const months = snap.months.map(m => ({...m}));
+  // Sottrai hidden_snap dai months: record nascosti su mobile ma ancora nello snapshot
+  // Usa i months direttamente (sempre completi) invece di snap.recent (solo 30 record)
+  const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const months = snap.months.map(m => {
+    const mCopy = {...m};
+    hiddenSnapBil.forEach(key => {
+      const parts = key.split('|');
+      if (!(parts[0]||'').startsWith(m.ym)) return;
+      const imp = parseFloat(parts[2]||0) || 0;
+      if (imp <= 0) return;
+      mCopy.spese = Math.max(0, (mCopy.spese||0) - imp);
+      mCopy.saldo = (mCopy.entrate||0) - mCopy.spese;
+      if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
+        mCopy.saldoBil = (mCopy.entratePrec ?? mCopy.entrate) - mCopy.spese;
+    });
+    return mCopy;
+  });
 
   const localRecords = getRecords();
   // Chiavi snap per deduplicazione
@@ -1318,8 +1331,14 @@ function renderDashboard() {
     const mSnap = snap.months.find(m => m.ym === currentMonth);
     if (mSnap) { totEn = mSnap.entrate || 0; totSp = mSnap.spese || 0; }
 
-    // NON sottrarre hidden_snap dal totale: snap.months è già la fonte di verità dal desktop.
-    // La sottrazione manuale causa bilancio sbagliato quando il record è già stato eliminato su Access.
+    // Sottrai hidden_snap dal totale del mese corrente
+    // Usa i months (completi) non snap.recent (solo 30 record)
+    hiddenSnapDash.forEach(key => {
+      const parts = key.split('|');
+      if (!(parts[0]||'').startsWith(currentMonth)) return;
+      const imp = parseFloat(parts[2]||0) || 0;
+      if (imp > 0) totSp = Math.max(0, totSp - imp);
+    });
   }
 
   // Aggiunge i record locali del mese SOLO se non già presenti nello snap
@@ -1441,7 +1460,7 @@ function deleteSnapRecord(e, snapIdx) {
   const r = cache[snapIdx];
   if (!r) { showToast('⚠ Record non trovato'); return; }
   if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
-  const key    = r.data + '|' + r.desc + '|' + r.importo;
+  const key    = r.data + '|' + (r.desc||'') + '|' + parseFloat(r.importo||0).toFixed(2);
   const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
   if (!hidden.includes(key)) {
     hidden.push(key);
