@@ -1045,22 +1045,10 @@ function renderBilancio() {
   let modo   = localStorage.getItem('bilModoEntrate') || snap.modoEntrate || 'prec';
 
   // ── Fondi snapshot + record locali ──────────────────────────
-  const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  const months = snap.months.map(m => {
-    const mCopy = {...m};
-    // Sottrai le transazioni snap nascoste per questo mese
-    hiddenSnapBil.forEach(key => {
-      const parts = key.split('|');
-      if ((parts[0]||'').startsWith(m.ym)) {
-        const imp = parseFloat(parts[2])||0;
-        mCopy.spese   = Math.max(0, (mCopy.spese||0) - imp);
-        mCopy.saldo   = (mCopy.entrate||0) - mCopy.spese;
-        if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
-          mCopy.saldoBil = (mCopy.entratePrec ?? mCopy.entrate) - mCopy.spese;
-      }
-    });
-    return mCopy;
-  });
+  // I totali in snap.months vengono già dal desktop (fonte di verità) — non sottrarre hidden_snap
+  // perché se il record è stato cancellato sul desktop, snap.months è già corretto senza di esso.
+  // Sottrarlo di nuovo causerebbe un doppio conteggio negativo.
+  const months = snap.months.map(m => ({...m}));
 
   const localRecords = getRecords();
   // Chiavi snap per deduplicazione
@@ -1291,15 +1279,8 @@ function renderDashboard() {
     const mSnap = snap.months.find(m => m.ym === currentMonth);
     if (mSnap) { totEn = mSnap.entrate || 0; totSp = mSnap.spese || 0; }
 
-    // Sottrai i record snap nascosti (cancellati dall'utente)
-    hiddenSnapDash.forEach(key => {
-      const parts = key.split('|');
-      const data  = parts[0]||'';
-      if (!data.startsWith(currentMonth)) return;
-      const imp = parseFloat(parts[2])||0;
-      // Tutti i record snap nascosti sono spese (per ora)
-      totSp = Math.max(0, totSp - imp);
-    });
+    // NON sottrarre hidden_snap dal totale: snap.months è già la fonte di verità dal desktop.
+    // La sottrazione manuale causa bilancio sbagliato quando il record è già stato eliminato su Access.
   }
 
   // Aggiunge i record locali del mese SOLO se non già presenti nello snap
