@@ -1087,13 +1087,16 @@ function renderBilancio() {
   // Sottrai hidden_snap dai months: record nascosti su mobile ma ancora nello snapshot
   // Usa i months direttamente (sempre completi) invece di snap.recent (solo 30 record)
   const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  console.log('[DEBUG hidden_snap]', hiddenSnapBil);
   const months = snap.months.map(m => {
     const mCopy = {...m};
     hiddenSnapBil.forEach(key => {
       const parts = key.split('|');
+      console.log('[DEBUG] key:', key, 'ym:', m.ym, 'match:', (parts[0]||'').startsWith(m.ym));
       if (!(parts[0]||'').startsWith(m.ym)) return;
       const imp = parseFloat(parts[2]||0) || 0;
       if (imp <= 0) return;
+      console.log('[DEBUG] sottraendo', imp, 'da', m.ym, 'spese era', mCopy.spese);
       mCopy.spese = Math.max(0, (mCopy.spese||0) - imp);
       mCopy.saldo = (mCopy.entrate||0) - mCopy.spese;
       if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
