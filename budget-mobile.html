@@ -846,8 +846,10 @@ async function driveUploadCSV() {
     // Genera CSV (stessa logica di exportCSV ma senza scaricare)
     const allRecords = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
     const records = allRecords.filter(r => !r.exported);
-    if (!records.length) {
-      showToast('⚠ Nessun record da esportare su Drive', 'error');
+    const DKEY_PRE = 'budget_deleted_log';
+    const delLogPre = JSON.parse(localStorage.getItem(DKEY_PRE)||'[]');
+    if (!records.length && !delLogPre.length) {
+      showToast('⚠ Nessun record né cancellazione da inviare su Drive', 'error');
       return;
     }
 
@@ -1043,27 +1045,48 @@ function renderBilancio() {
   let modo   = localStorage.getItem('bilModoEntrate') || snap.modoEntrate || 'prec';
 
   // ── Fondi snapshot + record locali ──────────────────────────
-  const months = snap.months.map(m => ({...m}));
-  const localRecords = getRecords();
-  if (localRecords.length) {
-    localRecords.forEach(r => {
-      const ymR = r.data.slice(0,7);
-      let mObj  = months.find(m => m.ym === ymR);
-      if (!mObj) {
-        mObj = { ym: ymR, entrate: 0, spese: 0, saldo: 0,
-                 entratePrec: null, saldoBil: null, ymPrec: null };
-        months.push(mObj);
-        months.sort((a,b) => a.ym.localeCompare(b.ym));
-      }
-      if (r.tipo === 'sp') {
-        mObj.spese   += r.importo;
-        mObj.saldo    = mObj.entrate - mObj.spese;
-        if (mObj.saldoBil !== null) mObj.saldoBil = (mObj.entratePrec ?? mObj.entrate) - mObj.spese;
-      } else {
-        mObj.entrate += r.importo;
-        mObj.saldo    = mObj.entrate - mObj.spese;
+  const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const months = snap.months.map(m => {
+    const mCopy = {...m};
+    // Sottrai le transazioni snap nascoste per questo mese
+    hiddenSnapBil.forEach(key => {
+      const parts = key.split('|');
+      if ((parts[0]||'').startsWith(m.ym)) {
+        const imp = parseFloat(parts[2])||0;
+        mCopy.spese   = Math.max(0, (mCopy.spese||0) - imp);
+        mCopy.saldo   = (mCopy.entrate||0) - mCopy.spese;
+        if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
+          mCopy.saldoBil = (mCopy.entratePrec ?? mCopy.entrate) - mCopy.spese;
       }
     });
+    return mCopy;
+  });
+
+  const localRecords = getRecords();
+  // Chiavi snap per deduplicazione
+  const snapAllKeys = new Set((snap.recent||[]).map(r=>`${r.data}|${r.desc}|${r.importo}`));
+
+  if (localRecords.length) {
+    localRecords
+      .filter(r => !snapAllKeys.has(`${r.data}|${r.desc||''}|${r.importo}`))
+      .forEach(r => {
+        const ymR = r.data.slice(0,7);
+        let mObj  = months.find(m => m.ym === ymR);
+        if (!mObj) {
+          mObj = { ym: ymR, entrate: 0, spese: 0, saldo: 0,
+                   entratePrec: null, saldoBil: null, ymPrec: null };
+          months.push(mObj);
+          months.sort((a,b) => a.ym.localeCompare(b.ym));
+        }
+        if (r.tipo === 'sp') {
+          mObj.spese   += r.importo;
+          mObj.saldo    = mObj.entrate - mObj.spese;
+          if (mObj.saldoBil !== null) mObj.saldoBil = (mObj.entratePrec ?? mObj.entrate) - mObj.spese;
+        } else {
+          mObj.entrate += r.importo;
+          mObj.saldo    = mObj.entrate - mObj.spese;
+        }
+      });
   }
 
   const last6        = months.slice(-6);
@@ -1259,13 +1282,28 @@ function renderDashboard() {
   // ── Somma snap + record locali per il mese visualizzato ──
   let totEn = 0, totSp = 0;
 
+  // Record cancellati/nascosti del mese corrente
+  const hiddenSnapDash = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const deletedLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  const deletedThisMonth = deletedLog.filter(r => r.data && r.data.startsWith(currentMonth));
+
   if (snap) {
     const mSnap = snap.months.find(m => m.ym === currentMonth);
     if (mSnap) { totEn = mSnap.entrate || 0; totSp = mSnap.spese || 0; }
+
+    // Sottrai i record snap nascosti (cancellati dall'utente)
+    hiddenSnapDash.forEach(key => {
+      const parts = key.split('|');
+      const data  = parts[0]||'';
+      if (!data.startsWith(currentMonth)) return;
+      const imp = parseFloat(parts[2])||0;
+      // Tutti i record snap nascosti sono spese (per ora)
+      totSp = Math.max(0, totSp - imp);
+    });
   }
+
   // Aggiunge i record locali del mese SOLO se non già presenti nello snap
   const localMonth = localRecords.filter(r => ym(r.data) === currentMonth);
-  // Chiavi delle transazioni già nello snap per questo mese
   const snapMonthKeys = new Set(
     snap ? (snap.recent||[])
       .filter(r => r.data && r.data.startsWith(currentMonth))
@@ -1276,6 +1314,11 @@ function renderDashboard() {
   );
   totEn += localMonthDeduped.filter(r=>r.tipo==='en').reduce((s,r)=>s+r.importo, 0);
   totSp += localMonthDeduped.filter(r=>r.tipo==='sp').reduce((s,r)=>s+r.importo, 0);
+
+  // Sottrai anche i record locali già cancellati (che erano stati aggiunti ai totali)
+  // (sono già stati rimossi da localRecords, ma se erano stati già sommati prima della cancellazione
+  //  il deletedLog li traccia — in realtà non serve qui perché saveRecords li rimuove subito)
+  // → i totali sono già corretti grazie a localMonthDeduped che usa localRecords aggiornati
 
   const saldo = totEn - totSp;
   const pct   = totEn > 0 ? Math.min(100, (saldo/totEn)*100) : 0;
@@ -1308,9 +1351,9 @@ function renderDashboard() {
   if (snap) {
     snapTx = (snap.recent||[])
       .filter(r => r.data && r.data.startsWith(currentMonth))
-      .filter(r => !hiddenSnap.includes(r.data+'|'+r.desc+'|'+r.importo));
+      .filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+r.importo));
     if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
-      snapTx = (snap.recent||[]).filter(r => !hiddenSnap.includes(r.data+'|'+r.desc+'|'+r.importo));
+      snapTx = (snap.recent||[]).filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+r.importo));
   }
 
   // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
@@ -1358,6 +1401,14 @@ function toggleDel(el) {
   el.classList.toggle('show-del');
 }
 
+// Aggiorna visivamente la pagina corrente dopo modifica dati
+function _refreshCurrentPage() {
+  renderDashboard();
+  if (currentPage === 'storico')   renderStorico();
+  if (currentPage === 'bilancio')  renderBilancio();
+  if (currentPage === 'spese-rapide') renderQuick();
+}
+
 function deleteRecord(e, localId, snapKey) {
   e.stopPropagation();
   const DKEY = 'budget_deleted_log';
@@ -1371,9 +1422,7 @@ function deleteRecord(e, localId, snapKey) {
     }
     saveRecords(getRecords().filter(r => r.id !== localId));
     showToast('✓ Record eliminato');
-    renderDashboard();
-    if (currentPage === 'storico') renderStorico();
-    if (currentPage === 'bilancio') renderBilancio();
+    _refreshCurrentPage();
   } else if (snapKey) {
     if (!confirm('Nascondere questa transazione?\n(verrà inclusa come cancellazione nel prossimo CSV)')) return;
     const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
@@ -1384,9 +1433,7 @@ function deleteRecord(e, localId, snapKey) {
                idCat:null, note:'', deletedAt:new Date().toISOString() });
     localStorage.setItem(DKEY, JSON.stringify(log));
     showToast('✓ Nascosto — incluso nel prossimo export CSV');
-    renderDashboard();
-    if (currentPage === 'storico') renderStorico();
-    if (currentPage === 'bilancio') renderBilancio();
+    _refreshCurrentPage();
   }
 }
 
