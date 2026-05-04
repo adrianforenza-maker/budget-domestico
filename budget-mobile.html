@@ -1045,10 +1045,29 @@ function renderBilancio() {
   let modo   = localStorage.getItem('bilModoEntrate') || snap.modoEntrate || 'prec';
 
   // ── Fondi snapshot + record locali ──────────────────────────
-  // I totali in snap.months vengono già dal desktop (fonte di verità) — non sottrarre hidden_snap
-  // perché se il record è stato cancellato sul desktop, snap.months è già corretto senza di esso.
-  // Sottrarlo di nuovo causerebbe un doppio conteggio negativo.
-  const months = snap.months.map(m => ({...m}));
+  // Sottrai hidden_snap dai months SOLO se il record è ancora presente nello snapshot
+  // (cioè il desktop non lo ha ancora cancellato). Se lo snapshot è già aggiornato
+  // (record assente da snap.recent), non sottrarlo per evitare doppio conteggio.
+  const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const snapRecentKeysBil = new Set((snap.recent||[]).map(r =>
+    `${r.data||r.Data}|${(r.desc||r.Descrizione||'').trim().toLowerCase()}|${parseFloat(r.importo||r.Importo||0).toFixed(2)}`
+  ));
+  const months = snap.months.map(m => {
+    const mCopy = {...m};
+    hiddenSnapBil.forEach(key => {
+      const parts = key.split('|');
+      if (!(parts[0]||'').startsWith(m.ym)) return;
+      // Verifica che il record esista ancora nello snapshot corrente
+      const nk = `${parts[0]}|${(parts[1]||'').trim().toLowerCase()}|${parseFloat(parts[2]||0).toFixed(2)}`;
+      if (!snapRecentKeysBil.has(nk)) return; // già eliminato dal desktop, non sottrarre
+      const imp = parseFloat(parts[2])||0;
+      mCopy.spese   = Math.max(0, (mCopy.spese||0) - imp);
+      mCopy.saldo   = (mCopy.entrate||0) - mCopy.spese;
+      if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
+        mCopy.saldoBil = (mCopy.entratePrec ?? mCopy.entrate) - mCopy.spese;
+    });
+    return mCopy;
+  });
 
   const localRecords = getRecords();
   // Chiavi snap per deduplicazione
@@ -1279,8 +1298,20 @@ function renderDashboard() {
     const mSnap = snap.months.find(m => m.ym === currentMonth);
     if (mSnap) { totEn = mSnap.entrate || 0; totSp = mSnap.spese || 0; }
 
-    // NON sottrarre hidden_snap dal totale: snap.months è già la fonte di verità dal desktop.
-    // La sottrazione manuale causa bilancio sbagliato quando il record è già stato eliminato su Access.
+    // Sottrai hidden_snap dal totale SOLO se il record è ancora presente nello snapshot
+    const _snapMonthKeys = new Set(
+      (snap.recent||[])
+        .filter(r => (r.data||r.Data||'').startsWith(currentMonth))
+        .map(r => `${r.data||r.Data}|${(r.desc||r.Descrizione||'').trim().toLowerCase()}|${parseFloat(r.importo||r.Importo||0).toFixed(2)}`)
+    );
+    hiddenSnapDash.forEach(key => {
+      const parts = key.split('|');
+      if (!(parts[0]||'').startsWith(currentMonth)) return;
+      const nk = `${parts[0]}|${(parts[1]||'').trim().toLowerCase()}|${parseFloat(parts[2]||0).toFixed(2)}`;
+      if (!_snapMonthKeys.has(nk)) return; // già eliminato dal desktop
+      const imp = parseFloat(parts[2])||0;
+      totSp = Math.max(0, totSp - imp);
+    });
   }
 
   // Aggiunge i record locali del mese SOLO se non già presenti nello snap
