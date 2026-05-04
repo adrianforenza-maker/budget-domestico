@@ -1754,32 +1754,23 @@ function _cleanLocalAfterSnapshot(snap) {
   const locals = getRecords();
   if (!locals.length) return;
 
-  // Costruisce un set di chiavi di tutte le transazioni presenti nello snapshot
-  const snapKeys = new Set();
-  // Lo snapshot contiene 'recent' (ultime 30) + eventualmente 'allRecords' se versione 3+
-  const snapTxAll = snap.allRecords || snap.recent || [];
-  snapTxAll.forEach(r => {
-    // Chiave tripla: data + descrizione normalizzata + importo
-    const key = `${r.data||r.Data}|${(r.desc||r.Descrizione||'').trim().toLowerCase()}|${parseFloat(r.importo||r.Importo||0).toFixed(2)}`;
-    snapKeys.add(key);
-  });
-
-  // Data dell'ultimo export dello snapshot — record locali POSTERIORI a questa data sono nuovi
+  // Data dell'ultimo export — record locali con exported=true anteriori a questa data
+  // sono già stati assorbiti dal desktop
   const snapDate = snap.exportedAt ? snap.exportedAt.slice(0,10) : '1970-01-01';
 
+  // Strategia principale: se il record è stato esportato (exported=true)
+  // e la data del record è <= snapDate, il desktop lo ha già processato → rimuovi
+  // NON usiamo snap.recent perché contiene solo 30 record e causa falsi negativi
   const cleaned = locals.filter(r => {
-    const key = `${r.data}|${(r.desc||'').trim().toLowerCase()}|${parseFloat(r.importo||0).toFixed(2)}`;
-    // Se il record è già nello snapshot → rimuovi (già assorbito dal desktop)
-    if (snapKeys.has(key)) return false;
-    // Se il record è stato esportato (flag exported=true) e non è posteriore allo snapshot → rimuovi
+    // Record esportato e data antecedente/uguale allo snapshot → già nel desktop → rimuovi
     if (r.exported && r.data <= snapDate) return false;
-    // Altrimenti mantieni (è genuinamente nuovo o non ancora esportato)
+    // Record non esportato → nuovo, tienilo
     return true;
   });
 
   if (cleaned.length !== locals.length) {
     saveRecords(cleaned);
-    console.log(`[merge] Rimossi ${locals.length - cleaned.length} record già assorbiti dallo snapshot`);
+    console.log(`[merge] Rimossi ${locals.length - cleaned.length} record già assorbiti (exported + data <= ${snapDate})`);
   }
 }
 
