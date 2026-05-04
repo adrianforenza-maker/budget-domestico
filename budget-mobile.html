@@ -470,6 +470,20 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   <button class="btn btn-ghost" onclick="exportQuickBackup()" style="margin-bottom:8px">💾 Salva backup spese rapide</button>
   <button class="btn btn-ghost" onclick="document.getElementById('quick-backup-input').click()" style="margin-bottom:20px">📂 Ripristina spese rapide</button>
   <input type="file" id="quick-backup-input" accept=".json" style="display:none" onchange="importQuickBackup(event)">
+
+  <div class="section-hdr" style="margin-top:20px;color:var(--red)">⚠️ Reset Dati</div>
+  <div class="card" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:12px">
+    Pulisci i record locali mobile. Utile dopo test o per ripartire da zero.
+    Lo snapshot PC e le categorie vengono mantenuti.
+  </div>
+  <button class="btn" onclick="resetSoloRecordLocali()"
+    style="margin-bottom:8px;background:rgba(240,86,106,.12);color:var(--red);border:1px solid rgba(240,86,106,.4)">
+    🗑 Cancella tutti i record locali
+  </button>
+  <button class="btn" onclick="resetTuttoMobile()"
+    style="margin-bottom:20px;background:rgba(240,86,106,.2);color:var(--red);border:1px solid var(--red);font-weight:700">
+    💣 Reset completo (record + snapshot + categorie)
+  </button>
 </div>
 
 <!-- BOTTOM NAV -->
@@ -2009,6 +2023,30 @@ function clearExported() {
   saveRecords(records);
   showToast('✓ Record esportati eliminati');
   renderExportStats();
+}
+
+function resetSoloRecordLocali() {
+  const n = getRecords().length;
+  if (!confirm(`Eliminare tutti i ${n} record locali mobile?\nLo snapshot e le categorie resteranno intatti.`)) return;
+  localStorage.removeItem('budget_mobile_records');
+  localStorage.removeItem('budget_deleted_log');
+  localStorage.removeItem('budget_drive_imported_csv_ids');
+  showToast(`✓ ${n} record eliminati — snapshot e categorie intatti`);
+  renderDashboard();
+  renderExportStats();
+  if (currentPage === 'bilancio') renderBilancio();
+  if (currentPage === 'storico')  renderStorico();
+}
+
+function resetTuttoMobile() {
+  if (!confirm('⚠️ RESET COMPLETO\n\nVerranno eliminati:\n• Tutti i record locali\n• Snapshot PC\n• Categorie\n• Configurazione Drive\n\nContinuare?')) return;
+  // Salva backup spese rapide prima di resettare
+  const quick = localStorage.getItem('budget_quick_items');
+  localStorage.clear();
+  // Ripristina solo le spese rapide
+  if (quick) localStorage.setItem('budget_quick_items', quick);
+  showToast('✓ Reset completo — ricarica la pagina');
+  setTimeout(() => location.reload(), 1500);
 }
 
 // ══════════════════════════════════════════
