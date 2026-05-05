@@ -2318,39 +2318,9 @@ function init() {
 init();
 </script>
 
-<!-- Google Identity Services + GAPI — caricati dopo init per non bloccare l'app -->
+<!-- Drive init: PKCE non richiede GIS/GAPI, ripristina token direttamente -->
 <script>
-(function loadGoogleLibs() {
-  // 1. Google Identity Services (OAuth 2.0)
-  const gisScript = document.createElement('script');
-  gisScript.src   = 'https://accounts.google.com/gsi/client';
-  gisScript.async = true;
-  gisScript.defer = true;
-  gisScript.onload = () => {
-    window._gisLoaded = true;
-    _tryDriveInit();
-  };
-  gisScript.onerror = () => { window._gisLoaded = false; };
-  document.head.appendChild(gisScript);
-
-  // 2. GAPI (per Google Picker)
-  const gapiScript = document.createElement('script');
-  gapiScript.src   = 'https://apis.google.com/js/api.js';
-  gapiScript.async = true;
-  gapiScript.defer = true;
-  gapiScript.onload = () => {
-    window._gapiLoaded = true;
-    _tryDriveInit();
-  };
-  gapiScript.onerror = () => { window._gapiLoaded = false; };
-  document.head.appendChild(gapiScript);
-})();
-
-function _tryDriveInit() {
-  if (window._gapiLoaded) {
-    try { gapi.load('picker', () => { window._driveReady = true; }); } catch(e) {}
-  }
-  // Ripristina token salvato se GIS è pronto
-  if (window._gisLoaded) _driveRestoreToken();
-}
+// Con PKCE non servono le librerie GIS/GAPI legacy
+// Il token viene ripristinato direttamente all'avvio
+window.addEventListener('load', () => { _driveRestoreToken(); });
 </script>
