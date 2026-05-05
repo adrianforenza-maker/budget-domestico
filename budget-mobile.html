@@ -474,6 +474,9 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   <!-- RESET -->
   <div style="margin-top:24px;padding:16px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
     <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:12px">⚠️ Reset Dati</div>
+    <button class="btn" onclick="resetDeletedLog()" style="width:100%;background:rgba(245,161,36,.12);border:1px solid rgba(245,161,36,.4);color:var(--amber);margin-bottom:8px">
+      🧹 Pulisci log cancellazioni pendenti
+    </button>
     <button class="btn" onclick="resetLocalRecords()" style="width:100%;background:rgba(240,86,106,.15);border:1px solid rgba(240,86,106,.4);color:var(--red);margin-bottom:8px">
       🗑 Cancella tutti i record locali
     </button>
@@ -2214,6 +2217,19 @@ function clearExported() {
 // ══════════════════════════════════════════
 function importCategorie() {
   document.getElementById('cat-file-input').click();
+}
+
+function resetDeletedLog() {
+  const log = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  if (!log.length) { showToast('ℹ Nessun log cancellazioni da pulire'); return; }
+  if (!confirm('Pulire ' + log.length + ' cancellazioni pendenti?
+Lo storico nello snapshot rimarrà invariato.')) return;
+  localStorage.removeItem('budget_deleted_log');
+  localStorage.removeItem('budget_hidden_snap');
+  showToast('✓ Log cancellazioni pulito');
+  if (typeof renderDashboard === 'function') renderDashboard();
+  if (typeof renderStorico === 'function') renderStorico();
+  if (typeof renderBilancio === 'function') renderBilancio();
 }
 
 function resetLocalRecords() {
