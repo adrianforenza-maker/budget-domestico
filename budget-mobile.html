@@ -586,8 +586,31 @@ function _driveRestoreToken() {
   const saved = localStorage.getItem('budget_drive_token');
   if (!saved) return;
   try {
-    const { token, exp } = JSON.parse(saved);
-    if (Date.now() < exp) { _driveToken = token; _driveUpdateUI(true); }
+    const { token, exp, refreshToken } = JSON.parse(saved);
+    if (Date.now() < exp) {
+      // Token ancora valido
+      _driveToken = token; _driveUpdateUI(true);
+    } else if (refreshToken) {
+      // Token scaduto ma c'è il refresh token — rinnovo silenzioso all'avvio
+      _driveUpdateUI(true); // mostra come connesso mentre rinnoviamo
+      fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          refresh_token: refreshToken,
+          client_id:     DRIVE_CLIENT_ID,
+          grant_type:    'refresh_token'
+        }).toString()
+      }).then(r => r.json()).then(tokens => {
+        if (tokens.access_token) {
+          _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+          _driveUpdateUI(true);
+        } else {
+          // Refresh fallito — richiedi login
+          _driveToken = null; _driveUpdateUI(false);
+        }
+      }).catch(() => { _driveToken = null; _driveUpdateUI(false); });
+    }
   } catch(e) {}
 }
 
