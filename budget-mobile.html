@@ -1447,11 +1447,12 @@ function renderDashboard() {
   const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
   let snapTx = [];
   if (snap) {
+    const _isHiddenSnap = r => hiddenSnapDash.some(k => k.startsWith(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)+'|') || k === r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2));
     snapTx = (snap.recent||[])
       .filter(r => r.data && r.data.startsWith(currentMonth))
-      .filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)));
+      .filter(r => !_isHiddenSnap(r));
     if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
-      snapTx = (snap.recent||[]).filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)));
+      snapTx = (snap.recent||[]).filter(r => !_isHiddenSnap(r));
   }
 
   // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
