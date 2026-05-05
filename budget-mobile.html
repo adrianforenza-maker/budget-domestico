@@ -557,15 +557,34 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
 
 <script>
 // ══════════════════════════════════════════
-//  STORAGE
+//  STORAGE KEYS (tutte le chiavi localStorage in un posto solo)
 // ══════════════════════════════════════════
-const DB_KEY    = 'budget_mobile_records';
-const CAT_KEY   = 'budget_mobile_cats';
+const DB_KEY       = 'budget_mobile_records';
+const CAT_KEY      = 'budget_mobile_cats';
+const SNAP_KEY     = 'budget_mobile_snapshot';
+const QUICK_KEY    = 'budget_mobile_quick';
+const DEL_LOG_KEY  = 'budget_deleted_log';
+const HIDDEN_KEY   = 'budget_hidden_snap';
 
 // ══════════════════════════════════════════════════════
 //  GOOGLE DRIVE SYNC
 //  Client ID creato su Google Cloud Console — Budget Domestico
 // ══════════════════════════════════════════════════════
+// ── Storage helpers ────────────────────────────────────────────────────────
+function getDeletedLog()          { try { return JSON.parse(localStorage.getItem(DEL_LOG_KEY)||'[]'); } catch(e) { return []; } }
+function saveDeletedLog(log)      { localStorage.setItem(DEL_LOG_KEY, JSON.stringify(log)); }
+function clearDeletedLog()        { localStorage.removeItem(DEL_LOG_KEY); }
+function addToDeletedLog(entry)   { const log = getDeletedLog(); log.push(entry); saveDeletedLog(log); }
+
+function getHiddenSnap()          { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY)||'[]'); } catch(e) { return []; } }
+function saveHiddenSnap(hidden)   { localStorage.setItem(HIDDEN_KEY, JSON.stringify(hidden)); }
+function clearHiddenSnap()        { localStorage.removeItem(HIDDEN_KEY); }
+function addToHiddenSnap(key)     { const h = getHiddenSnap(); if (!h.includes(key)) { h.push(key); saveHiddenSnap(h); } }
+function removeFromHiddenSnap(key){ const h = getHiddenSnap().filter(k => k !== key); saveHiddenSnap(h); }
+
+function getSnapshot()            { try { return getSnapshot(); } catch(e) { return null; } }
+function saveSnapshot(snap)       { saveSnapshot(snap); }
+
 const DRIVE_CLIENT_ID  = '159486398410-i3bko425v0od9kpjb0g4ectcjutf644t.apps.googleusercontent.com';
 const DRIVE_SCOPES     = 'https://www.googleapis.com/auth/drive';
 const DRIVE_FOLDER_KEY = 'budget_drive_folder_id';   // ID cartella salvato in localStorage
@@ -747,9 +766,8 @@ async function _driveWithToken(fn) {
     return await fn();
   } catch(e) {
     if (['not_connected','no_refresh_token','refresh_failed'].some(s => e.message?.startsWith(s))) {
-      showToast('🔑 Sessione Drive scaduta — riconnetti', 'error');
+      showToast('🔑 Sessione Drive scaduta — premi Riconnetti', 'error');
       _driveUpdateUI(false);
-      driveConnect();
       return;
     }
     throw e;
@@ -818,15 +836,16 @@ async function driveLoadSnapshot() {
   const btn = document.getElementById('drive-load-snap-btn');
   if (btn) btn.textContent = '⏳ Caricamento...';
   try {
-    // Auto-refresh token silenzioso
-    await _driveEnsureToken().catch(async () => {
-      await new Promise((res, rej) => {
-        const client = google.accounts.oauth2.initTokenClient({
-          client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPES,
-          callback: (r) => { if (r.error) rej(r.error); else { _driveSaveToken(r.access_token, r.expires_in); _driveUpdateUI(true); res(); } }
-        });
-        client.requestAccessToken();
-      });
+    // Se non connesso, avvia login PKCE
+    const saved = localStorage.getItem('budget_drive_token');
+    if (!saved && !_driveToken) { driveConnect(); return; }
+    // Auto-refresh token silenzioso (PKCE)
+    await _driveEnsureToken().catch(async (err) => {
+      // Se refresh fallito — mostra messaggio, non richiamare driveConnect (evita loop)
+      _driveToken = null;
+      _driveUpdateUI(false);
+      showToast('🔑 Sessione scaduta — premi Riconnetti', 'error');
+      throw err;
     });
     // Cerca snapshot.json OVUNQUE su Drive, prende il più recente
     const q = encodeURIComponent(`name='snapshot.json' and trashed=false`);
@@ -860,7 +879,7 @@ async function driveLoadSnapshot() {
     if (!dlResp.ok) throw new Error(`Download fallito: HTTP ${dlResp.status}`);
     const snap = JSON.parse(await dlResp.text());
 
-    localStorage.setItem(SNAP_KEY, JSON.stringify(snap));
+    saveSnapshot(snap);
     localStorage.setItem('budget_drive_snap_loaded', file.modifiedTime);
     localStorage.setItem(DRIVE_SNAP_KEY, file.id);
     if (snap.cats) localStorage.setItem(CAT_KEY, JSON.stringify(snap.cats));
@@ -894,16 +913,11 @@ async function driveUploadCSV() {
   const btn = document.getElementById('drive-upload-csv-btn');
   if (btn) btn.textContent = '⏳ Upload...';
   try {
-    await _driveEnsureToken().catch(async (e) => {
-      if (e.message === 'silent_refresh_failed' || !_driveToken) {
-        await new Promise((res, rej) => {
-          const client = google.accounts.oauth2.initTokenClient({
-            client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPES,
-            callback: (r) => { if (r.error) rej(r.error); else { _driveSaveToken(r.access_token, r.expires_in); _driveUpdateUI(true); res(); } }
-          });
-          client.requestAccessToken();
-        });
-      }
+    await _driveEnsureToken().catch(async (err) => {
+      _driveToken = null;
+      _driveUpdateUI(false);
+      showToast('🔑 Sessione Drive scaduta — riconnetti', 'error');
+      throw err;
     });
     const folderId = await _driveEnsureFolder();
     if (!folderId) { showToast('❌ Cartella Drive non trovata', 'error'); return; }
@@ -911,8 +925,7 @@ async function driveUploadCSV() {
     // Genera CSV (stessa logica di exportCSV ma senza scaricare)
     const allRecords = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
     const records = allRecords.filter(r => !r.exported);
-    const DKEY_PRE = 'budget_deleted_log';
-    const delLogPre = JSON.parse(localStorage.getItem(DKEY_PRE)||'[]');
+    const delLogPre = getDeletedLog();
     if (!records.length && !delLogPre.length) {
       showToast('⚠ Nessun record né cancellazione da inviare su Drive', 'error');
       return;
@@ -927,8 +940,7 @@ async function driveUploadCSV() {
     const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
     const _catsD = getCats();
     // Aggiungi anche righe CANCELLATO dal log
-    const DKEY3 = 'budget_deleted_log';
-    const delLogD = JSON.parse(localStorage.getItem(DKEY3)||'[]');
+    const delLogD = getDeletedLog();
     const rows = records.map(r => {
       const _arr = r.tipo==='sp' ? _catsD.spese : _catsD.entrate;
       const cat = _arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
@@ -981,8 +993,7 @@ async function driveUploadCSV() {
     }
 
     // Marca come esportati e svuota log cancellazioni
-    const DKEY3c = 'budget_deleted_log';
-    localStorage.removeItem(DKEY3c);
+    clearDeletedLog();
     const updated = allRecords.map(r => records.find(x=>x.id===r.id) ? {...r, exported:true} : r);
     localStorage.setItem(DB_KEY, JSON.stringify(updated));
     renderExportStats();
@@ -1008,7 +1019,7 @@ async function driveAutoSync() {
     // 2. Controlla record non esportati E cancellazioni pendenti
     const allRecords = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
     const toExport   = allRecords.filter(r => !r.exported);
-    const delLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+    const delLog     = getDeletedLog();
     const hasData    = toExport.length > 0 || delLog.length > 0;
     if (hasData) {
       let msg = '✓ Snapshot aggiornato!\n\n';
@@ -1027,7 +1038,6 @@ async function driveAutoSync() {
 }
 
 const EXP_KEY   = 'budget_mobile_exported';
-const QUICK_KEY = 'budget_mobile_quick';
 
 function getRecords() {
   try { return JSON.parse(localStorage.getItem(DB_KEY)||'[]'); } catch(e) { return []; }
@@ -1122,20 +1132,42 @@ function renderBilancio() {
   // ── Fondi snapshot + record locali ──────────────────────────
   // Sottrai hidden_snap dai months: record nascosti su mobile ma ancora nello snapshot
   // Usa i months direttamente (sempre completi) invece di snap.recent (solo 30 record)
-  const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  const months = snap.months.map(m => {
-    const mCopy = {...m};
-    hiddenSnapBil.forEach(key => {
-      const parts = key.split('|');
-      if (!(parts[0]||'').startsWith(m.ym)) return;
-      const imp = parseFloat(parts[2]||0) || 0;
-      if (imp <= 0) return;
-      mCopy.spese = Math.max(0, (mCopy.spese||0) - imp);
-      mCopy.saldo = (mCopy.entrate||0) - mCopy.spese;
-      if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
-        mCopy.saldoBil = (mCopy.entratePrec ?? mCopy.entrate) - mCopy.spese;
-    });
-    return mCopy;
+  const hiddenSnapBil = getHiddenSnap();
+  // Prima clona tutti i mesi
+  const months = snap.months.map(m => ({...m}));
+  // Applica hidden_snap rispettando la stessa logica delle due modalità
+  hiddenSnapBil.forEach(key => {
+    const parts = key.split('|');
+    const recYm = (parts[0]||'').slice(0,7);
+    const imp   = parseFloat(parts[2]||0) || 0;
+    const tipo  = parts[3] || 'spesa';
+    if (!recYm || imp <= 0) return;
+    if (tipo === 'spesa') {
+      // Spesa: sottrai dal mese della data del record
+      const mObj = months.find(m => m.ym === recYm);
+      if (!mObj) return;
+      mObj.spese  = Math.max(0, (mObj.spese||0) - imp);
+      mObj.saldo  = (mObj.entrate||0) - mObj.spese;
+      if (mObj.saldoBil != null) mObj.saldoBil = (mObj.entratePrec ?? mObj.entrate) - mObj.spese;
+    } else {
+      // Entrata: sottrai da entrate del mese della data del record (modalità 'curr')
+      const mObj = months.find(m => m.ym === recYm);
+      if (mObj) {
+        mObj.entrate = Math.max(0, (mObj.entrate||0) - imp);
+        mObj.saldo   = mObj.entrate - (mObj.spese||0);
+      }
+      // Sottrai anche da entratePrec del mese successivo (modalità 'prec')
+      const nextYm = (() => {
+        const [y, mo] = recYm.split('-').map(Number);
+        const nd = new Date(y, mo, 1); // mo è 1-based, new Date(y, mo) = primo del mese successivo
+        return nd.getFullYear() + '-' + String(nd.getMonth()+1).padStart(2,'0');
+      })();
+      const mNext = months.find(m => m.ym === nextYm);
+      if (mNext && mNext.entratePrec != null) {
+        mNext.entratePrec = Math.max(0, (mNext.entratePrec||0) - imp);
+        if (mNext.saldoBil != null) mNext.saldoBil = mNext.entratePrec - (mNext.spese||0);
+      }
+    }
   });
 
   const localRecords = getRecords();
@@ -1359,8 +1391,8 @@ function renderDashboard() {
   let totEn = 0, totSp = 0;
 
   // Record cancellati/nascosti del mese corrente
-  const hiddenSnapDash = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  const deletedLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  const hiddenSnapDash = getHiddenSnap();
+  const deletedLog     = getDeletedLog();
   const deletedThisMonth = deletedLog.filter(r => r.data && r.data.startsWith(currentMonth));
 
   if (snap) {
@@ -1372,8 +1404,11 @@ function renderDashboard() {
     hiddenSnapDash.forEach(key => {
       const parts = key.split('|');
       if (!(parts[0]||'').startsWith(currentMonth)) return;
-      const imp = parseFloat(parts[2]||0) || 0;
-      if (imp > 0) totSp = Math.max(0, totSp - imp);
+      const imp  = parseFloat(parts[2]||0) || 0;
+      const tipo = parts[3] || 'spesa';
+      if (imp <= 0) return;
+      if (tipo === 'entrata') totEn = Math.max(0, totEn - imp);
+      else                    totSp = Math.max(0, totSp - imp);
     });
   }
 
@@ -1421,14 +1456,14 @@ function renderDashboard() {
   });
 
   // Prendi transazioni snap del mese (o tutte se è il mese corrente dello snap)
-  const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const hiddenSnap = getHiddenSnap();
   let snapTx = [];
   if (snap) {
     snapTx = (snap.recent||[])
       .filter(r => r.data && r.data.startsWith(currentMonth))
-      .filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)));
+      .filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa')));
     if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
-      snapTx = (snap.recent||[]).filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)));
+      snapTx = (snap.recent||[]).filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa')));
   }
 
   // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
@@ -1449,7 +1484,7 @@ function renderDashboard() {
       const mobileBadge = r._local
         ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
       // Usa chiave normalizzata — non l'indice numerico che può essere -1 per mismatch importo
-      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2));
+      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa'));
       const deleteBtn = r._local
         ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
         : `<button class="tx-delete-btn" onclick="deleteSnapRecordByKey(event,'${snapKey}')" style="opacity:.6">✕</button>`;
@@ -1494,18 +1529,11 @@ function deleteSnapRecordByKey(e, encodedKey) {
   const key = encodedKey.replace(/\|([^|]+)\|/, (m, desc) => '|' + decodeURIComponent(desc) + '|');
   if (!key) { showToast('⚠ Chiave record non valida'); return; }
   if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
-  const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  if (!hidden.includes(key)) {
-    hidden.push(key);
-    localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
-  }
-  // Estrai dati dalla chiave per il log cancellazioni
+  addToHiddenSnap(key);
   const parts = key.split('|');
-  const DKEY = 'budget_deleted_log';
-  const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
-  log.push({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'',
-             importo:parseFloat(parts[2]||0), idCat:null, note:'', deletedAt:new Date().toISOString() });
-  localStorage.setItem(DKEY, JSON.stringify(log));
+  const tipoLog = (parts[3]||'spesa') === 'entrata' ? 'en' : 'sp';
+  addToDeletedLog({ tipo:tipoLog, data:parts[0]||'', desc:parts[1]||'',
+    importo:parseFloat(parts[2]||0), idCat:null, note:'', deletedAt:new Date().toISOString() });
   showToast('✓ Nascosto — incluso nel prossimo sync Drive');
   _refreshCurrentPage();
   if (typeof renderBilancio === 'function') renderBilancio();
@@ -1513,27 +1541,19 @@ function deleteSnapRecordByKey(e, encodedKey) {
 
 function deleteRecord(e, localId, snapKey) {
   e.stopPropagation();
-  const DKEY = 'budget_deleted_log';
   if (localId) {
     const rec = getRecords().find(r => r.id === localId);
-    if (rec) {
-      const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
-      log.push({ tipo:rec.tipo, data:rec.data, desc:rec.desc||'', importo:rec.importo,
-                 idCat:rec.idCat, note:rec.note||'', deletedAt:new Date().toISOString() });
-      localStorage.setItem(DKEY, JSON.stringify(log));
-    }
+    if (rec) addToDeletedLog({ tipo:rec.tipo, data:rec.data, desc:rec.desc||'', importo:rec.importo,
+      idCat:rec.idCat, note:rec.note||'', deletedAt:new Date().toISOString() });
     saveRecords(getRecords().filter(r => r.id !== localId));
     showToast('✓ Record eliminato');
     _refreshCurrentPage();
   } else if (snapKey) {
     if (!confirm('Nascondere questa transazione?\n(verrà inclusa come cancellazione nel prossimo CSV)')) return;
-    const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-    if (!hidden.includes(snapKey)) { hidden.push(snapKey); localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden)); }
+    addToHiddenSnap(snapKey);
     const parts = snapKey.split('|');
-    const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
-    log.push({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'', importo:parseFloat(parts[2])||0,
-               idCat:null, note:'', deletedAt:new Date().toISOString() });
-    localStorage.setItem(DKEY, JSON.stringify(log));
+    addToDeletedLog({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'', importo:parseFloat(parts[2])||0,
+      idCat:null, note:'', deletedAt:new Date().toISOString() });
     showToast('✓ Nascosto — incluso nel prossimo export CSV');
     _refreshCurrentPage();
   }
@@ -1549,7 +1569,7 @@ function renderStorico() {
   const el = document.getElementById('storico-list');
 
   // Cancellazioni pendenti (non ancora inviate su Drive) del mese corrente
-  const deletedLog = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  const deletedLog = getDeletedLog();
   const pendingDel = deletedLog.filter(d => d.data && ym(d.data) === currentMonthSt);
 
   if (!records.length && !pendingDel.length) {
@@ -1596,7 +1616,7 @@ function renderStorico() {
 
 // Annulla una cancellazione pendente (prima che venga inviata su Drive)
 function revertDeletion(idx) {
-  const log = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  const log = getDeletedLog();
   const pendingDel = log.filter(d => d.data && ym(d.data) === currentMonthSt);
   const entry = pendingDel[idx];
   if (!entry) return;
@@ -1608,14 +1628,16 @@ function revertDeletion(idx) {
     d.deletedAt === entry.deletedAt
   );
   if (entryIdx >= 0) log.splice(entryIdx, 1);
-  localStorage.setItem('budget_deleted_log', JSON.stringify(log));
+  saveDeletedLog(log);
 
   // Rimuovi anche da hidden_snap se era un record snapshot
-  const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  const snapKey = entry.data + '|' + (entry.desc||'') + '|' + parseFloat(entry.importo||0).toFixed(2);
-  const hidIdx = hiddenSnap.indexOf(snapKey);
+  const hiddenSnap = getHiddenSnap();
+  const tipoSnap = entry.tipo === 'en' ? 'entrata' : 'spesa';
+  const snapKey = entry.data + '|' + (entry.desc||'') + '|' + parseFloat(entry.importo||0).toFixed(2) + '|' + tipoSnap;
+  const snapKeyOld = entry.data + '|' + (entry.desc||'') + '|' + parseFloat(entry.importo||0).toFixed(2); // compat. chiavi vecchie
+  const hidIdx = hiddenSnap.indexOf(snapKey) >= 0 ? hiddenSnap.indexOf(snapKey) : hiddenSnap.indexOf(snapKeyOld);
   if (hidIdx >= 0) hiddenSnap.splice(hidIdx, 1);
-  localStorage.setItem('budget_hidden_snap', JSON.stringify(hiddenSnap));
+  saveHiddenSnap(hiddenSnap);
 
   showToast('↩ Cancellazione annullata');
   renderStorico();
@@ -1866,7 +1888,6 @@ function salvaRecord() {
 // ══════════════════════════════════════════
 //  SNAPSHOT DAL PC
 // ══════════════════════════════════════════
-const SNAP_KEY = 'budget_mobile_snapshot';
 
 function getSnapshot() {
   try { return JSON.parse(localStorage.getItem(SNAP_KEY)||'null'); } catch(e) { return null; }
@@ -1880,7 +1901,7 @@ function getSnapshot() {
 function _cleanLocalAfterSnapshot(snap) {
   // Svuota hidden_snap — se lo snapshot è aggiornato, i record cancellati
   // non ci sono già più. Tenere hidden_snap causa bilancio sbagliato.
-  localStorage.removeItem('budget_hidden_snap');
+  clearHiddenSnap();
 
   const locals = getRecords();
   if (!locals.length) return;
@@ -1918,7 +1939,7 @@ function _cleanLocalAfterSnapshot(snap) {
   // Pulisci budget_hidden_snap: rimuovi chiavi di record non più presenti nello snapshot
   // Quando il desktop cancella un record e rifà lo snapshot, quel record sparisce dallo snap.
   // Se la chiave rimane in hidden_snap, il bilancio lo sottrae di nuovo causando importo errato.
-  const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const hidden = getHiddenSnap();
   if (hidden.length) {
     // Costruisci set di tutte le chiavi data|desc|importo presenti nello snapshot
     const snapAllTx = snap.allRecords || snap.recent || [];
@@ -1935,7 +1956,7 @@ function _cleanLocalAfterSnapshot(snap) {
       return snapKeySet.has(normalizedKey);
     });
     if (cleanedHidden.length !== hidden.length) {
-      localStorage.setItem('budget_hidden_snap', JSON.stringify(cleanedHidden));
+      saveHiddenSnap(cleanedHidden);
       console.log(`[merge] Pulite ${hidden.length - cleanedHidden.length} chiavi hidden non più nello snapshot`);
     }
   }
@@ -1949,7 +1970,7 @@ function loadSnapshot(e) {
     try {
       const snap = JSON.parse(ev.target.result);
       if (!snap.version || !snap.months) { showToast('⚠ File non valido'); return; }
-      localStorage.setItem(SNAP_KEY, JSON.stringify(snap));
+      saveSnapshot(snap);
       // Aggiorna categorie dallo snapshot
       if (snap.cats) localStorage.setItem(CAT_KEY, JSON.stringify(snap.cats));
       // Ripristina spese rapide dallo snapshot (solo se presenti e locali sono vuote)
@@ -2142,8 +2163,7 @@ function exportCSV() {
   });
 
   // Aggiungi cancellazioni
-  const DKEY2 = 'budget_deleted_log';
-  const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]');
+  const delLog = getDeletedLog();
   const delRows = delLog.map(d => {
     const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
     const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
@@ -2158,7 +2178,7 @@ function exportCSV() {
   a.download = `budget-iphone-${now.toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  localStorage.removeItem(DKEY2);
+  clearDeletedLog();
 
   // Marca come esportati
   const updated = allRecords.map(r => {
@@ -2187,9 +2207,9 @@ function importCategorie() {
 
 function resetLocalRecords() {
   if (!confirm('Cancellare tutti i record locali?\nLo snapshot e le categorie rimarranno intatti.')) return;
-  localStorage.removeItem('budget_mobile_records');
-  localStorage.removeItem('budget_deleted_log');
-  localStorage.removeItem('budget_hidden_snap');
+  localStorage.removeItem(DB_KEY);
+  clearDeletedLog();
+  clearHiddenSnap();
   showToast('✓ Record locali cancellati');
   if (typeof renderDashboard === 'function') renderDashboard();
 }
@@ -2298,39 +2318,9 @@ function init() {
 init();
 </script>
 
-<!-- Google Identity Services + GAPI — caricati dopo init per non bloccare l'app -->
+<!-- Drive init: PKCE non richiede GIS/GAPI, ripristina token direttamente -->
 <script>
-(function loadGoogleLibs() {
-  // 1. Google Identity Services (OAuth 2.0)
-  const gisScript = document.createElement('script');
-  gisScript.src   = 'https://accounts.google.com/gsi/client';
-  gisScript.async = true;
-  gisScript.defer = true;
-  gisScript.onload = () => {
-    window._gisLoaded = true;
-    _tryDriveInit();
-  };
-  gisScript.onerror = () => { window._gisLoaded = false; };
-  document.head.appendChild(gisScript);
-
-  // 2. GAPI (per Google Picker)
-  const gapiScript = document.createElement('script');
-  gapiScript.src   = 'https://apis.google.com/js/api.js';
-  gapiScript.async = true;
-  gapiScript.defer = true;
-  gapiScript.onload = () => {
-    window._gapiLoaded = true;
-    _tryDriveInit();
-  };
-  gapiScript.onerror = () => { window._gapiLoaded = false; };
-  document.head.appendChild(gapiScript);
-})();
-
-function _tryDriveInit() {
-  if (window._gapiLoaded) {
-    try { gapi.load('picker', () => { window._driveReady = true; }); } catch(e) {}
-  }
-  // Ripristina token salvato se GIS è pronto
-  if (window._gisLoaded) _driveRestoreToken();
-}
+// Con PKCE non servono le librerie GIS/GAPI legacy
+// Il token viene ripristinato direttamente all'avvio
+window.addEventListener('load', () => { _driveRestoreToken(); });
 </script>
