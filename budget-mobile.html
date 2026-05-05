@@ -474,7 +474,7 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
 </div>
 
 <!-- RESET DATI — fuori da snapshot-content per non essere sovrascritto da renderSnapshot() -->
-<div style="padding:0 16px 20px">
+<div style="padding:0 16px 20px" id="reset-dati-section">
   <div style="margin-top:8px;padding:16px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
     <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:12px">⚠️ Reset Dati</div>
     <button class="btn" onclick="resetDeletedLog()" style="width:100%;background:rgba(245,161,36,.12);border:1px solid rgba(245,161,36,.4);color:var(--amber);margin-bottom:8px">
@@ -1553,6 +1553,13 @@ function deleteRecord(e, localId, snapKey) {
   e.stopPropagation();
   const DKEY = 'budget_deleted_log';
   if (localId) {
+    const recLocal = getRecords().find(r => r.id === localId);
+    if (recLocal) {
+      const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
+      log.push({ tipo:recLocal.tipo, data:recLocal.data, desc:recLocal.desc||'', importo:recLocal.importo,
+                 idCat:recLocal.idCat, note:recLocal.note||'', deletedAt:new Date().toISOString(), isLocal:true });
+      localStorage.setItem(DKEY, JSON.stringify(log));
+    }
     saveRecords(getRecords().filter(r => r.id !== localId));
     showToast('✓ Record eliminato');
     _refreshCurrentPage();
@@ -1562,7 +1569,7 @@ function deleteRecord(e, localId, snapKey) {
     if (!hidden.includes(snapKey)) { hidden.push(snapKey); localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden)); }
     const parts = snapKey.split('|');
     const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
-    log.push({ tipo: parts[3] === 'entrata' ? 'en' : 'sp', data:parts[0]||'', desc:parts[1]||'', importo:parseFloat(parts[2])||0,
+    log.push({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'', importo:parseFloat(parts[2])||0,
                idCat:null, note:'', deletedAt:new Date().toISOString() });
     localStorage.setItem(DKEY, JSON.stringify(log));
     showToast('✓ Nascosto — incluso nel prossimo export CSV');
@@ -1622,7 +1629,7 @@ function renderStorico() {
             <div style="font-size:13px;font-weight:600;color:var(--t2);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.desc||'—'}</div>
             <div style="font-size:11px;color:${col}">${fmtDate(d.data)} · ${sign} € ${eur(d.importo||0)}</div>
           </div>
-          <button onclick="revertDeletion(${idx})" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>
+          ${d.isLocal ? '' : `<button onclick="revertDeletion(${idx})" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>`}
         </div>`;
       }).join('')}
     </div>` : '';
@@ -2224,12 +2231,12 @@ function importCategorie() {
 
 function resetDeletedLog() {
   const log = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
-  if (!log.length) { showToast('ℹ Nessun log cancellazioni da pulire'); return; }
-  if (!confirm('Pulire ' + log.length + ' cancellazioni pendenti? Lo storico nello snapshot rimarrà invariato.')) return;
+  if (!log.length) { showToast('Nessun log da pulire'); return; }
+  if (!confirm('Pulire ' + log.length + ' cancellazioni pendenti?')) return;
   localStorage.removeItem('budget_deleted_log');
   localStorage.removeItem('budget_hidden_snap');
-  showToast('✓ Log cancellazioni pulito');
-  if (typeof renderDashboard === 'function') renderDashboard();
+  showToast('Log cancellazioni pulito');
+  renderDashboard();
   if (typeof renderStorico === 'function') renderStorico();
   if (typeof renderBilancio === 'function') renderBilancio();
 }
