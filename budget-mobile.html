@@ -1489,10 +1489,11 @@ function deleteSnapRecord(e, snapIdx) {
     hidden.push(key);
     localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
   }
-  // DEBUG TEMPORANEO — mostra chiave salvata e chiavi snap per confronto
+  // DEBUG TEMPORANEO — mostra chiave salvata e match
   const snapKeys = (window._snapTxCache||[]).map(s => s.data+'|'+s.desc+'|'+parseFloat(s.importo||0).toFixed(2));
-  const match = snapKeys.includes(key);
-  showToast('🔑 KEY: ' + key + ' | MATCH: ' + match, match ? 'success' : 'error', 8000);
+  const dbgMatch = snapKeys.includes(key);
+  // Mostra in un alert per leggibilità completa
+  alert('KEY SALVATA:\n' + key + '\n\nMATCH IN SNAP: ' + dbgMatch + '\n\nPRIMA SNAP KEY:\n' + (snapKeys[0]||'(vuoto)'));
   const DKEY = 'budget_deleted_log';
   const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
   log.push({ tipo: r.tipo==='spesa'?'sp':'en', data:r.data, desc:r.desc||'',
