@@ -1145,7 +1145,8 @@ function renderBilancio() {
       if (m) {
         m.entrate = Math.max(0, (m.entrate||0) - imp);
         m.saldo   = m.entrate - (m.spese||0);
-        if (m.saldoBil != null) m.saldoBil = (m.entratePrec ?? m.entrate) - (m.spese||0);
+        // saldoBil in modo "stesso mese" coincide con saldo — non va toccato separatamente
+        // in modo "mese prec." usa entratePrec (non cambiata) → già corretto senza intervento
       }
       // Sottrai da entratePrec del mese successivo (modalità "Mese Prec.")
       const [y, mo] = recYm.split('-').map(Number);
