@@ -1642,9 +1642,10 @@ function revertDeletion(idx) {
   localStorage.setItem('budget_deleted_log', JSON.stringify(log));
 
   // Rimuovi anche da hidden_snap se era un record snapshot
+  // La chiave salvata ha 4 parti: data|desc|importo|tipo — cerca anche il formato legacy a 3 parti
   const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  const snapKey = entry.data + '|' + (entry.desc||'') + '|' + parseFloat(entry.importo||0).toFixed(2);
-  const hidIdx = hiddenSnap.indexOf(snapKey);
+  const snapBase   = entry.data + '|' + (entry.desc||'') + '|' + parseFloat(entry.importo||0).toFixed(2);
+  const hidIdx     = hiddenSnap.findIndex(k => k === snapBase || k.startsWith(snapBase + '|'));
   if (hidIdx >= 0) hiddenSnap.splice(hidIdx, 1);
   localStorage.setItem('budget_hidden_snap', JSON.stringify(hiddenSnap));
 
