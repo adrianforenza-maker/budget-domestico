@@ -1128,9 +1128,14 @@ function renderBilancio() {
     hiddenSnapBil.forEach(key => {
       const parts = key.split('|');
       if (!(parts[0]||'').startsWith(m.ym)) return;
-      const imp = parseFloat(parts[2]||0) || 0;
+      const imp  = parseFloat(parts[2]||0) || 0;
+      const tipo = parts[3] || 'spesa';
       if (imp <= 0) return;
-      mCopy.spese = Math.max(0, (mCopy.spese||0) - imp);
+      if (tipo === 'entrata') {
+        mCopy.entrate = Math.max(0, (mCopy.entrate||0) - imp);
+      } else {
+        mCopy.spese = Math.max(0, (mCopy.spese||0) - imp);
+      }
       mCopy.saldo = (mCopy.entrate||0) - mCopy.spese;
       if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
         mCopy.saldoBil = (mCopy.entratePrec ?? mCopy.entrate) - mCopy.spese;
@@ -1372,8 +1377,11 @@ function renderDashboard() {
     hiddenSnapDash.forEach(key => {
       const parts = key.split('|');
       if (!(parts[0]||'').startsWith(currentMonth)) return;
-      const imp = parseFloat(parts[2]||0) || 0;
-      if (imp > 0) totSp = Math.max(0, totSp - imp);
+      const imp  = parseFloat(parts[2]||0) || 0;
+      const tipo = parts[3] || 'spesa';
+      if (imp <= 0) return;
+      if (tipo === 'entrata') totEn = Math.max(0, totEn - imp);
+      else                    totSp = Math.max(0, totSp - imp);
     });
   }
 
@@ -1449,7 +1457,7 @@ function renderDashboard() {
       const mobileBadge = r._local
         ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
       // Usa chiave normalizzata — non l'indice numerico che può essere -1 per mismatch importo
-      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2));
+      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa'));
       const deleteBtn = r._local
         ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
         : `<button class="tx-delete-btn" onclick="deleteSnapRecordByKey(event,'${snapKey}')" style="opacity:.6">✕</button>`;
@@ -1503,7 +1511,8 @@ function deleteSnapRecordByKey(e, encodedKey) {
   const parts = key.split('|');
   const DKEY = 'budget_deleted_log';
   const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
-  log.push({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'',
+  const tipoLog = (parts[3]||'spesa') === 'entrata' ? 'en' : 'sp';
+  log.push({ tipo:tipoLog, data:parts[0]||'', desc:parts[1]||'',
              importo:parseFloat(parts[2]||0), idCat:null, note:'', deletedAt:new Date().toISOString() });
   localStorage.setItem(DKEY, JSON.stringify(log));
   showToast('✓ Nascosto — incluso nel prossimo sync Drive');
