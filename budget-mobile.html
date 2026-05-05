@@ -1123,24 +1123,39 @@ function renderBilancio() {
   // Sottrai hidden_snap dai months: record nascosti su mobile ma ancora nello snapshot
   // Usa i months direttamente (sempre completi) invece di snap.recent (solo 30 record)
   const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  const months = snap.months.map(m => {
-    const mCopy = {...m};
-    hiddenSnapBil.forEach(key => {
-      const parts = key.split('|');
-      if (!(parts[0]||'').startsWith(m.ym)) return;
-      const imp  = parseFloat(parts[2]||0) || 0;
-      const tipo = parts[3] || 'spesa';
-      if (imp <= 0) return;
-      if (tipo === 'entrata') {
-        mCopy.entrate = Math.max(0, (mCopy.entrate||0) - imp);
-      } else {
-        mCopy.spese = Math.max(0, (mCopy.spese||0) - imp);
+  // Clona tutti i mesi prima di modificarli
+  const months = snap.months.map(m => ({...m}));
+  // Applica hidden_snap: spese → sottrai da spese del mese; entrate → sottrai da entrate
+  // del mese del record E da entratePrec del mese successivo (per modalità "Mese Prec.")
+  hiddenSnapBil.forEach(key => {
+    const parts = key.split('|');
+    const recYm = (parts[0]||'').slice(0,7);
+    const imp   = parseFloat(parts[2]||0) || 0;
+    const tipo  = parts[3] || 'spesa';
+    if (!recYm || imp <= 0) return;
+    if (tipo === 'spesa') {
+      const m = months.find(x => x.ym === recYm);
+      if (!m) return;
+      m.spese  = Math.max(0, (m.spese||0) - imp);
+      m.saldo  = (m.entrate||0) - m.spese;
+      if (m.saldoBil != null) m.saldoBil = (m.entratePrec ?? m.entrate) - m.spese;
+    } else {
+      // Sottrai da entrate del mese del record (modalità "Stesso Mese")
+      const m = months.find(x => x.ym === recYm);
+      if (m) {
+        m.entrate = Math.max(0, (m.entrate||0) - imp);
+        m.saldo   = m.entrate - (m.spese||0);
       }
-      mCopy.saldo = (mCopy.entrate||0) - mCopy.spese;
-      if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
-        mCopy.saldoBil = (mCopy.entratePrec ?? mCopy.entrate) - mCopy.spese;
-    });
-    return mCopy;
+      // Sottrai da entratePrec del mese successivo (modalità "Mese Prec.")
+      const [y, mo] = recYm.split('-').map(Number);
+      const nextDate = new Date(y, mo, 1); // mo è 1-based → new Date(y, mo) = mese successivo
+      const nextYm = nextDate.getFullYear() + '-' + String(nextDate.getMonth()+1).padStart(2,'0');
+      const mNext = months.find(x => x.ym === nextYm);
+      if (mNext && mNext.entratePrec != null) {
+        mNext.entratePrec = Math.max(0, (mNext.entratePrec||0) - imp);
+        if (mNext.saldoBil != null) mNext.saldoBil = mNext.entratePrec - (mNext.spese||0);
+      }
+    }
   });
 
   const localRecords = getRecords();
