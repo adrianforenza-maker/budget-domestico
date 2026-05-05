@@ -1,0 +1,2282 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Budget">
+<meta name="theme-color" content="#0d0f1a">
+<title>Budget Domestico</title>
+<style>
+:root {
+  --bg:     #0d0f1a;
+  --bg2:    #131629;
+  --bg3:    #1a1e32;
+  --bg4:    #20253d;
+  --accent: #4f8ef7;
+  --green:  #1ecf96;
+  --red:    #f0566a;
+  --amber:  #f5a124;
+  --purple: #7c5cf6;
+  --t1:     #eef0f8;
+  --t2:     #b8bdd8;
+  --t3:     #6b7299;
+  --border: #252a45;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: -apple-system, 'SF Pro Display', sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  padding-bottom: calc(80px + var(--safe-bot));
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(13,15,26,.92);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  border-bottom: 1px solid var(--border);
+  padding: calc(var(--safe-top) + 12px) 20px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar-title { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
+.topbar-sub { font-size: 11px; color: var(--t3); margin-top: 1px; }
+.topbar-sync { font-size: 11px; color: var(--accent); background: rgba(79,142,247,.12); padding: 4px 10px; border-radius: 20px; border: none; cursor: pointer; font-weight: 600; }
+
+/* ── NAV BAR ── */
+.navbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(13,15,26,.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding-bottom: var(--safe-bot);
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 3px; padding: 10px 4px 8px;
+  border: none; background: none; color: var(--t3);
+  font-size: 10px; font-weight: 600; cursor: pointer;
+  transition: color .15s;
+}
+.nav-item.active { color: var(--accent); }
+.nav-item svg { width: 22px; height: 22px; }
+
+/* ── PAGES ── */
+.page { display: none; padding: 20px 16px 0; animation: fadeIn .2s ease; }
+.page.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── CARDS ── */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.card-label { font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.card-value { font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
+.card-sub { font-size: 11px; color: var(--t3); margin-top: 3px; }
+
+/* ── DASHBOARD GRID ── */
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.dash-kpi { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.dash-kpi .lbl { font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.dash-kpi .val { font-size: 20px; font-weight: 800; }
+
+/* ── MONTH NAV ── */
+.month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.month-nav button { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg3); color: var(--t2); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.month-nav span { font-size: 16px; font-weight: 700; }
+
+/* ── PROGRESS BAR ── */
+.progress { height: 6px; background: var(--bg4); border-radius: 3px; overflow: hidden; margin: 10px 0 4px; }
+.progress-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+
+/* ── RECENT LIST ── */
+.tx-list { display: flex; flex-direction: column; gap: 8px; }
+.tx-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px;
+  cursor: pointer; transition: background .1s;
+}
+.tx-item:active { background: var(--bg3); }
+.tx-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.tx-info { flex: 1; min-width: 0; }
+.tx-desc { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-meta { font-size: 11px; color: var(--t3); margin-top: 1px; }
+.tx-amount { font-size: 15px; font-weight: 700; white-space: nowrap; }
+
+/* ── FAB ── */
+.fab {
+  position: fixed; right: 20px; bottom: calc(80px + var(--safe-bot) + 12px);
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--accent); color: #fff; border: none;
+  font-size: 26px; cursor: pointer; z-index: 90;
+  box-shadow: 0 4px 20px rgba(79,142,247,.5);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s, box-shadow .15s;
+}
+.fab:active { transform: scale(.93); box-shadow: 0 2px 10px rgba(79,142,247,.4); }
+
+/* ── MODAL BOTTOM SHEET ── */
+.sheet-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.sheet-overlay.open { display: block; }
+.sheet {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 201;
+  background: var(--bg2); border-radius: 24px 24px 0 0;
+  border-top: 1px solid var(--border);
+  padding: 0 20px calc(20px + var(--safe-bot));
+  transform: translateY(100%); transition: transform .3s cubic-bezier(.32,1.05,.85,1);
+  max-height: 90dvh; overflow-y: auto;
+}
+.sheet.open { transform: translateY(0); }
+.sheet-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 20px; }
+.sheet-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+
+/* ── FORM ── */
+.form-group { margin-bottom: 16px; }
+.quick-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 10px 8px; border-radius: 12px;
+  background: var(--bg3); border: 1px solid var(--border);
+  cursor: pointer; min-width: 72px; flex: 1; max-width: 90px;
+  transition: all .15s; -webkit-tap-highlight-color: transparent;
+}
+.quick-btn:active { transform: scale(.94); opacity: .85; }
+.quick-btn .q-emoji { font-size: 22px; line-height: 1; }
+.quick-btn .q-name  { font-size: 10px; font-weight: 700; color: var(--t2); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+.quick-btn .q-price { font-size: 11px; color: var(--red); font-weight: 800; }
+.quick-edit-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; background: var(--bg3); border-radius: 12px;
+  margin-bottom: 8px; border: 1px solid var(--border);
+}
+.form-label { font-size: 11px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; display: block; }
+.form-ctrl {
+  width: 100%; background: var(--bg4); border: 1px solid var(--border);
+  border-radius: 12px; color: var(--t1); font-size: 16px;
+  padding: 13px 14px; font-family: inherit; outline: none;
+  -webkit-appearance: none; appearance: none;
+  transition: border-color .15s;
+}
+.form-ctrl:focus { border-color: var(--accent); }
+select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7299' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+
+/* ── TYPE TOGGLE ── */
+.type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+.type-btn { padding: 12px; border-radius: 12px; border: 2px solid var(--border); background: transparent; color: var(--t3); font-size: 14px; font-weight: 700; cursor: pointer; transition: all .15s; }
+.type-btn.active-sp { border-color: var(--red); background: rgba(240,86,106,.12); color: var(--red); }
+.type-btn.active-en { border-color: var(--green); background: rgba(30,207,150,.12); color: var(--green); }
+
+/* ── AMOUNT INPUT ── */
+.amount-display {
+  font-size: 48px; font-weight: 800; text-align: center;
+  padding: 16px; letter-spacing: -1px;
+  background: var(--bg3); border-radius: 14px; margin-bottom: 16px;
+  min-height: 80px; display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--border);
+}
+.amount-display.sp { color: var(--red); border-color: rgba(240,86,106,.3); }
+.amount-display.en { color: var(--green); border-color: rgba(30,207,150,.3); }
+
+/* ── NUMPAD ── */
+.numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.numpad-btn {
+  height: 60px; border-radius: 12px; border: none;
+  background: var(--bg3); color: var(--t1);
+  font-size: 20px; font-weight: 600; cursor: pointer;
+  transition: background .1s, transform .1s;
+  display: flex; align-items: center; justify-content: center;
+}
+.numpad-btn:active { background: var(--bg4); transform: scale(.95); }
+.numpad-btn.del { font-size: 16px; color: var(--t3); }
+.numpad-btn.ok { background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; }
+.numpad-btn.ok.sp { background: var(--red); }
+.numpad-btn.ok.en { background: var(--green); color: #1e2235; }
+
+/* ── SECTION HEADER ── */
+.section-hdr { font-size: 13px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin: 20px 0 10px; }
+
+/* ── BADGE ── */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+
+/* ── BUTTON ── */
+.btn { width: 100%; padding: 16px; border-radius: 14px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity .15s; font-family: inherit; }
+.btn:active { opacity: .8; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-danger { background: rgba(240,86,106,.15); color: var(--red); border: 1px solid rgba(240,86,106,.3); }
+.btn-ghost { background: var(--bg4); color: var(--t2); }
+
+/* ── EXPORT ── */
+.export-card { background: linear-gradient(135deg, rgba(79,142,247,.15), rgba(124,92,246,.1)); border: 1px solid rgba(79,142,247,.3); border-radius: 16px; padding: 20px; margin-bottom: 12px; }
+
+/* ── SETTINGS ── */
+.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.setting-label { font-size: 14px; }
+.setting-sub { font-size: 11px; color: var(--t3); margin-top: 2px; }
+
+/* ── EMPTY ── */
+.empty { text-align: center; padding: 40px 20px; color: var(--t3); }
+.empty-icon { font-size: 40px; margin-bottom: 10px; }
+.empty-text { font-size: 14px; }
+
+/* ── CAT GRID ── */
+.cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cat-grid-wrap { max-height: 180px; overflow-y: auto; border-radius: 12px; border: 1px solid var(--border); padding: 8px; background: var(--bg3); -webkit-overflow-scrolling: touch; }
+.cat-chip { padding: 10px 6px; border-radius: 10px; border: 2px solid transparent; background: var(--bg3); text-align: center; cursor: pointer; transition: all .15s; }
+.cat-chip.sel { border-color: currentColor; }
+.cat-chip .dot { width: 12px; height: 12px; border-radius: 50%; margin: 0 auto 5px; }
+.cat-chip .name { font-size: 10px; font-weight: 600; color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── DELETE BTN ── */
+.tx-item { position: relative; }
+.tx-delete-btn {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(240,86,106,.15); border: 1px solid rgba(240,86,106,.3);
+  color: var(--red); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-title">💰 Budget Domestico</div>
+    <div class="topbar-sub" id="topbar-sub">Caricamento...</div>
+  </div>
+  <button class="topbar-sync" onclick="showPage('export')">⬆ Esporta</button>
+  <button class="topbar-sync" id="drive-sync-btn" onclick="driveAutoSync()" style="background:rgba(30,207,150,.15);color:var(--green);margin-left:4px" title="Sync Google Drive">☁ Drive</button>
+</div>
+
+<!-- PAGES -->
+
+<!-- DASHBOARD -->
+<div class="page active" id="page-dashboard">
+  <div class="month-nav">
+    <button onclick="changeMonth(-1)">‹</button>
+    <span id="month-label">—</span>
+    <button onclick="changeMonth(1)">›</button>
+  </div>
+
+  <div class="dash-grid">
+    <div class="dash-kpi">
+      <div class="lbl">Entrate</div>
+      <div class="val" id="kpi-en" style="color:var(--green)">—</div>
+    </div>
+    <div class="dash-kpi">
+      <div class="lbl">Uscite</div>
+      <div class="val" id="kpi-sp" style="color:var(--red)">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Saldo del mese</div>
+    <div class="card-value" id="kpi-saldo">—</div>
+    <div class="progress">
+      <div class="progress-fill" id="kpi-bar" style="background:var(--accent);width:0%"></div>
+    </div>
+    <div class="card-sub" id="kpi-pct">—</div>
+  </div>
+
+  <div class="section-hdr">Ultime transazioni</div>
+  <div class="tx-list" id="recent-list">
+    <div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>
+  </div>
+</div>
+
+<!-- REGISTRA -->
+<div class="page" id="page-registra">
+
+  <!-- SPESE RAPIDE -->
+  <div id="quick-section" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.06em">⚡ SPESE RAPIDE</div>
+      <button onclick="openQuickEdit()" style="background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;padding:2px 6px">✏️ Gestisci</button>
+    </div>
+    <div id="quick-grid" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div id="quick-empty" style="font-size:12px;color:var(--t3);text-align:center;padding:12px 0;display:none">
+      Nessuna spesa rapida — premi ✏️ per aggiungerne
+    </div>
+  </div>
+
+  <div style="height:1px;background:var(--border);margin-bottom:16px"></div>
+
+  <div class="type-toggle">
+    <button class="type-btn active-sp" id="btn-sp" onclick="setType('sp')">📤 Uscita</button>
+    <button class="type-btn" id="btn-en" onclick="setType('en')">📥 Entrata</button>
+  </div>
+
+  <div class="amount-display sp" id="amount-display">€ 0,00</div>
+
+  <div class="numpad" id="numpad">
+    <button class="numpad-btn" onclick="numpad('7')">7</button>
+    <button class="numpad-btn" onclick="numpad('8')">8</button>
+    <button class="numpad-btn" onclick="numpad('9')">9</button>
+    <button class="numpad-btn" onclick="numpad('4')">4</button>
+    <button class="numpad-btn" onclick="numpad('5')">5</button>
+    <button class="numpad-btn" onclick="numpad('6')">6</button>
+    <button class="numpad-btn" onclick="numpad('1')">1</button>
+    <button class="numpad-btn" onclick="numpad('2')">2</button>
+    <button class="numpad-btn" onclick="numpad('3')">3</button>
+    <button class="numpad-btn" onclick="numpad('.')">·</button>
+    <button class="numpad-btn" onclick="numpad('0')">0</button>
+    <button class="numpad-btn del" onclick="numpad('del')">⌫</button>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Descrizione</label>
+    <input type="text" class="form-ctrl" id="reg-desc" placeholder="Es. Caffè, Benzina...">
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Categoria</label>
+    <select class="form-ctrl" id="cat-select" onchange="selectCat(parseInt(this.value))"></select>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Data</label>
+    <input type="date" class="form-ctrl" id="reg-data">
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Note (opzionale)</label>
+    <input type="text" class="form-ctrl" id="reg-note" placeholder="Opzionale...">
+  </div>
+
+  <button class="btn btn-primary sp" id="btn-salva" onclick="salvaRecord()" style="margin-bottom:20px">
+    + Aggiungi Uscita
+  </button>
+</div>
+
+<!-- STORICO -->
+<div class="page" id="page-storico">
+  <div class="month-nav" style="margin-bottom:12px">
+    <button onclick="changeMonthSt(-1)">‹</button>
+    <span id="month-label-st">—</span>
+    <button onclick="changeMonthSt(1)">›</button>
+  </div>
+  <div id="storico-list"></div>
+</div>
+
+<!-- BILANCIO (dati da snapshot PC) -->
+<div class="page" id="page-bilancio">
+  <div id="bilancio-content">
+    <div class="export-card" style="background:linear-gradient(135deg,rgba(79,142,247,.12),rgba(30,207,150,.08));border-color:rgba(79,142,247,.3)">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">💰 Bilancio PC</div>
+      <div style="font-size:13px;color:var(--t2);line-height:1.5">Carica uno snapshot dal PC per vedere il bilancio completo.</div>
+    </div>
+    <button class="btn btn-primary" onclick="document.getElementById('snapshot-input-bil').click()">📂 Carica snapshot</button>
+    <input type="file" id="snapshot-input-bil" accept=".json" style="display:none" onchange="loadSnapshot(event)">
+  </div>
+</div>
+
+<!-- SNAPSHOT (dati da PC) -->
+<div class="page" id="page-snapshot">
+  <div id="snapshot-content">
+    <div class="export-card" style="background:linear-gradient(135deg,rgba(30,207,150,.12),rgba(79,142,247,.08));border-color:rgba(30,207,150,.3)">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">📊 Dati dal PC</div>
+      <div style="font-size:13px;color:var(--t2);line-height:1.5">Carica lo snapshot esportato da Budget Domestico per vedere il bilancio aggiornato.</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="driveLoadSnapshot()" style="flex:1;min-width:160px">☁ Sync da Drive</button>
+      <button class="btn" onclick="document.getElementById('snapshot-input').click()" style="flex:1;min-width:160px;background:var(--bg3);color:var(--t2);border:1px solid var(--b2)">📂 Da file locale</button>
+    </div>
+    <input type="file" id="snapshot-input" accept=".json" style="display:none" onchange="loadSnapshot(event)">
+    <div id="snapshot-hint" class="card" style="font-size:13px;color:var(--t2);line-height:1.7">
+      <b style="color:var(--t1)">Come fare (Drive Sync automatico):</b><br>
+      1. Sul PC premi <b style="color:var(--green)">📊 Snapshot</b> → salva il file<br>
+      2. Sposta il file nella tua cartella <b style="color:var(--accent)">Google Drive</b> sul PC<br>
+      3. Rinominalo <b style="color:var(--accent)">snapshot.json</b> (sovrascrive il precedente)<br>
+      4. Qui premi <b style="color:var(--green)">☁ Sync da Drive</b> → aggiornamento automatico!<br>
+      <span style="color:var(--t3);font-size:11px">In alternativa usa "Da file locale" per caricamento manuale</span>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT -->
+<div class="page" id="page-export">
+  <div class="export-card">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">⬆ Esporta per Access</div>
+    <div style="font-size:13px;color:var(--t2);line-height:1.5">Scarica il CSV con tutte le transazioni registrate sull'iPhone. Importalo nel tool principale con "Importa da iPhone".</div>
+  </div>
+
+  <div class="card" id="export-stats"></div>
+
+  <div class="form-group">
+    <label class="form-label">Periodo da esportare</label>
+    <select class="form-ctrl" id="export-range">
+      <option value="all">Tutto lo storico</option>
+      <option value="month" selected>Mese corrente</option>
+      <option value="3months">Ultimi 3 mesi</option>
+      <option value="notexported">Solo non ancora esportati</option>
+    </select>
+  </div>
+
+  <button class="btn btn-primary" onclick="exportCSV()" style="margin-bottom:12px">⬇ Scarica CSV</button>
+  <button class="btn btn-danger" onclick="clearExported()" style="margin-bottom:20px">🗑 Cancella già esportati</button>
+
+  <div class="section-hdr">Istruzioni</div>
+  <div class="card" style="font-size:13px;color:var(--t2);line-height:1.7">
+    <b style="color:var(--t1)">Metodo 1 — Drive (consigliato):</b><br>
+    Premi <b style="color:var(--green)">📤 Invia CSV su Drive</b> qui sopra → il file viene caricato automaticamente nella cartella <b style="color:var(--accent)">BudgetDomestico</b> su Google Drive<br>
+    Sul PC apri la cartella Google Drive → trovi il file CSV → importalo con <b style="color:var(--accent)">📱 iPhone Import</b><br><br>
+    <b style="color:var(--t1)">Metodo 2 — Manuale:</b><br>
+    Premi "Scarica CSV" → invia al PC via AirDrop o Mail → importa con <b style="color:var(--accent)">📱 iPhone Import</b>
+  </div>
+
+  <div class="section-hdr" style="margin-top:24px">Sincronizza Categorie</div>
+  <div class="card" style="font-size:13px;color:var(--t2);line-height:1.7">
+    Per aggiornare le categorie dal PC, esporta da Budget Domestico con<br>
+    <b style="color:var(--accent)">"Esporta categorie per iPhone"</b><br>
+    poi apri il file JSON qui sotto.
+  </div>
+  <button class="btn btn-ghost" onclick="importCategorie()" style="margin-bottom:12px">📂 Carica categorie da PC</button>
+  <input type="file" id="cat-file-input" accept=".json" style="display:none" onchange="loadCategorieFile(event)">
+
+  <!-- ══ GOOGLE DRIVE SYNC ══ -->
+  <div class="section-hdr" style="margin-top:24px">☁ Google Drive Sync</div>
+  <div class="card" id="drive-status-card" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:12px">
+    <span id="drive-status-txt">Non connesso a Google Drive.</span>
+  </div>
+  <button class="btn btn-primary" id="drive-connect-btn" onclick="driveConnect()" style="margin-bottom:8px">🔑 Connetti Google Drive</button>
+  <button class="btn" id="drive-load-snap-btn" onclick="driveLoadSnapshot()" style="display:none;margin-bottom:8px;background:var(--bg3);color:var(--accent);border:1px solid var(--accent)">📥 Carica snapshot da Drive</button>
+  <button class="btn" id="drive-upload-csv-btn" onclick="driveUploadCSV()" style="display:none;margin-bottom:8px;background:var(--bg3);color:var(--green);border:1px solid var(--green)">📤 Invia CSV su Drive</button>
+  <button class="btn btn-ghost" id="drive-auto-btn" onclick="driveAutoSync()" style="display:none;margin-bottom:20px">🔄 Auto Sync (tutto)</button>
+
+  <div class="section-hdr" style="margin-top:20px">⚡ Backup Spese Rapide</div>
+  <div class="card" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:12px">
+    Salva le tue spese rapide in un file JSON per non perderle mai quando cambi browser o dispositivo.
+  </div>
+  <button class="btn btn-ghost" onclick="exportQuickBackup()" style="margin-bottom:8px">💾 Salva backup spese rapide</button>
+  <button class="btn btn-ghost" onclick="document.getElementById('quick-backup-input').click()" style="margin-bottom:20px">📂 Ripristina spese rapide</button>
+  <input type="file" id="quick-backup-input" accept=".json" style="display:none" onchange="importQuickBackup(event)">
+
+  <!-- RESET -->
+  <div style="margin-top:24px;padding:16px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:12px">⚠️ Reset Dati</div>
+    <button class="btn" onclick="resetLocalRecords()" style="width:100%;background:rgba(240,86,106,.15);border:1px solid rgba(240,86,106,.4);color:var(--red);margin-bottom:8px">
+      🗑 Cancella tutti i record locali
+    </button>
+    <button class="btn" onclick="resetAll()" style="width:100%;background:rgba(240,86,106,.25);border:1px solid rgba(240,86,106,.6);color:var(--red)">
+      💣 Reset completo (tutto tranne spese rapide)
+    </button>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="navbar">
+  <button class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Dashboard
+  </button>
+  <button class="nav-item" id="nav-registra" onclick="showPage('registra')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+    Registra
+  </button>
+  <button class="nav-item" id="nav-storico" onclick="showPage('storico')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+    Storico
+  </button>
+  <button class="nav-item" id="nav-bilancio" onclick="showPage('bilancio')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-6"/></svg>
+    Bilancio
+  </button>
+  <button class="nav-item" id="nav-snapshot" onclick="showPage('snapshot')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h5v2M19 19h-5M19 16v5"/></svg>
+    PC Sync
+  </button>
+</nav>
+
+<!-- MODAL SPESE RAPIDE -->
+<div id="modal-quick" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;align-items:flex-end;justify-content:center">
+  <div style="background:var(--bg2);border-radius:20px 20px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding:20px 16px 40px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:700">⚡ Gestisci Spese Rapide</div>
+      <button onclick="closeQuickEdit()" style="background:none;border:none;color:var(--t3);font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div id="quick-list-edit" style="margin-bottom:16px"></div>
+    <button onclick="openAddQuick()" class="btn btn-primary" style="margin-bottom:8px">+ Aggiungi spesa rapida</button>
+  </div>
+</div>
+
+<!-- MODAL AGGIUNGI/MODIFICA SPESA RAPIDA -->
+<div id="modal-quick-form" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:400;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--bg2);border-radius:16px;width:100%;max-width:360px;padding:20px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:16px" id="quick-form-title">Nuova Spesa Rapida</div>
+    <input type="hidden" id="qf-id">
+
+    <div class="form-group">
+      <label class="form-label">Emoji / Icona</label>
+      <input type="text" class="form-ctrl" id="qf-emoji" placeholder="🚗 🛒 ☕ 🏠..." maxlength="2" style="font-size:22px;text-align:center">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nome</label>
+      <input type="text" class="form-ctrl" id="qf-nome" placeholder="Es. Carburante Adrian">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Importo predefinito (€) — lascia 0 per chiederlo ogni volta</label>
+      <input type="number" class="form-ctrl" id="qf-importo" placeholder="0.00" step="0.01" min="0">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      <select class="form-ctrl" id="qf-cat"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrizione predefinita</label>
+      <input type="text" class="form-ctrl" id="qf-desc" placeholder="Es. Carburante auto Adrian">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button onclick="closeQuickForm()" class="btn" style="flex:1;background:var(--bg3);color:var(--t2);border:1px solid var(--border)">Annulla</button>
+      <button onclick="saveQuick()" class="btn btn-primary" style="flex:1">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" style="position:fixed;bottom:calc(90px + var(--safe-bot));left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:500"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  STORAGE
+// ══════════════════════════════════════════
+const DB_KEY    = 'budget_mobile_records';
+const CAT_KEY   = 'budget_mobile_cats';
+
+// ══════════════════════════════════════════════════════
+//  GOOGLE DRIVE SYNC
+//  Client ID creato su Google Cloud Console — Budget Domestico
+// ══════════════════════════════════════════════════════
+const DRIVE_CLIENT_ID  = '159486398410-i3bko425v0od9kpjb0g4ectcjutf644t.apps.googleusercontent.com';
+const DRIVE_SCOPES     = 'https://www.googleapis.com/auth/drive';
+const DRIVE_FOLDER_KEY = 'budget_drive_folder_id';   // ID cartella salvato in localStorage
+const DRIVE_SNAP_KEY   = 'budget_drive_snap_file_id'; // ID file snapshot
+const DRIVE_FOLDER_NAME = 'BudgetDomestico';
+
+let _driveToken  = null;   // access token corrente
+let _driveReady  = false;  // gapi picker pronto
+
+// ── Inizializzazione GAPI ──────────────────────────────────────
+function _driveGapiLoaded() {
+  try { gapi.load('picker', () => { window._driveReady = true; }); } catch(e) {}
+}
+
+// ── PKCE helpers ───────────────────────────────────────────────
+function _pkceMakeVerifier() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function _pkceChallenge(verifier) {
+  const enc  = new TextEncoder().encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', enc);
+  return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+// ── Gestione token ──────────────────────────────────────────────
+function _driveRestoreToken() {
+  const saved = localStorage.getItem('budget_drive_token');
+  if (!saved) return;
+  try {
+    const { token, exp, refreshToken } = JSON.parse(saved);
+    if (Date.now() < exp) {
+      // Token ancora valido
+      _driveToken = token; _driveUpdateUI(true);
+    } else if (refreshToken) {
+      // Token scaduto ma c'è il refresh token — rinnovo silenzioso all'avvio
+      _driveUpdateUI(true); // mostra come connesso mentre rinnoviamo
+      fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          refresh_token: refreshToken,
+          client_id:     DRIVE_CLIENT_ID,
+          grant_type:    'refresh_token'
+        }).toString()
+      }).then(r => r.json()).then(tokens => {
+        if (tokens.access_token) {
+          _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+          _driveUpdateUI(true);
+        } else {
+          // Refresh fallito — richiedi login
+          _driveToken = null; _driveUpdateUI(false);
+        }
+      }).catch(() => { _driveToken = null; _driveUpdateUI(false); });
+    }
+  } catch(e) {}
+}
+
+function _driveSaveToken(token, expiresIn, refreshToken) {
+  const exp = Date.now() + (expiresIn - 60) * 1000;
+  const cur = (() => { try { return JSON.parse(localStorage.getItem('budget_drive_token')||'{}'); } catch(e){return{};} })();
+  const obj = { token, exp, refreshToken: refreshToken || cur.refreshToken || null };
+  localStorage.setItem('budget_drive_token', JSON.stringify(obj));
+  _driveToken = token;
+}
+
+// ── PKCE Login (prima connessione) ─────────────────────────────
+async function driveConnect() {
+  const saved = localStorage.getItem('budget_drive_token');
+  if (saved) {
+    try {
+      const { token, exp, refreshToken } = JSON.parse(saved);
+      if (Date.now() < exp) {
+        if (confirm('Disconnettersi da Google Drive?')) {
+          localStorage.removeItem('budget_drive_token');
+          _driveToken = null;
+          _driveUpdateUI(false);
+        }
+        return;
+      }
+    } catch(e) {}
+  }
+
+  const verifier   = _pkceMakeVerifier();
+  const challenge  = await _pkceChallenge(verifier);
+  const state      = _pkceMakeVerifier().slice(0, 16);
+  const redirectUri = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'oauth-callback.html';
+
+  // Salva verifier per il callback
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('pkce_state',    state);
+
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authUrl.searchParams.set('client_id',             DRIVE_CLIENT_ID);
+  authUrl.searchParams.set('redirect_uri',          redirectUri);
+  authUrl.searchParams.set('response_type',         'code');
+  authUrl.searchParams.set('scope',                 DRIVE_SCOPES);
+  authUrl.searchParams.set('state',                 state);
+  authUrl.searchParams.set('code_challenge',        challenge);
+  authUrl.searchParams.set('code_challenge_method', 'S256');
+  authUrl.searchParams.set('access_type',           'offline');
+  authUrl.searchParams.set('prompt',                'consent');
+
+  // Apri popup OAuth
+  const popup = window.open(authUrl.toString(), 'driveAuth',
+    'width=480,height=640,left=100,top=100');
+
+  // Ascolta messaggio dal callback
+  const handler = async (ev) => {
+    if (ev.origin !== window.location.origin) return;
+    if (ev.data?.type !== 'drive_oauth_code') return;
+    window.removeEventListener('message', handler);
+    if (popup && !popup.closed) popup.close();
+
+    if (ev.data.error) { showToast('❌ Auth fallita: ' + ev.data.error, 'error'); return; }
+    if (ev.data.state !== state) { showToast('❌ State mismatch — riprova', 'error'); return; }
+
+    // Scambia code con tokens
+    try {
+      const resp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code:          ev.data.code,
+          client_id:     DRIVE_CLIENT_ID,
+          redirect_uri:  redirectUri,
+          grant_type:    'authorization_code',
+          code_verifier: verifier
+        }).toString()
+      });
+      const tokens = await resp.json();
+      if (tokens.access_token) {
+        _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token);
+        _driveUpdateUI(true);
+        showToast('✓ Connesso a Google Drive!', 'success');
+        _driveEnsureFolder();
+      } else {
+        showToast('❌ Token non ricevuto: ' + (tokens.error||'unknown'), 'error');
+      }
+    } catch(e) { showToast('❌ Errore connessione: ' + e.message, 'error'); }
+  };
+  window.addEventListener('message', handler);
+}
+
+// ── Rinnovo silenzioso con refresh token (PKCE) ────────────────
+async function _driveEnsureToken() {
+  const saved = localStorage.getItem('budget_drive_token');
+  if (!saved) throw new Error('not_connected');
+  const { token, exp, refreshToken } = JSON.parse(saved);
+
+  // Token ancora valido (>2 min)
+  if (Date.now() < exp - 120000) { _driveToken = token; return token; }
+
+  // Token scaduto — rinnovo silenzioso con refresh token
+  if (!refreshToken) throw new Error('no_refresh_token');
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id:     DRIVE_CLIENT_ID,
+      grant_type:    'refresh_token'
+    }).toString()
+  });
+  const tokens = await resp.json();
+  if (tokens.access_token) {
+    _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+    return tokens.access_token;
+  }
+  throw new Error('refresh_failed: ' + (tokens.error||'unknown'));
+}
+
+// Wrapper: assicura token valido, se fallisce chiede login
+async function _driveWithToken(fn) {
+  try {
+    await _driveEnsureToken();
+    return await fn();
+  } catch(e) {
+    if (['not_connected','no_refresh_token','refresh_failed'].some(s => e.message?.startsWith(s))) {
+      showToast('🔑 Sessione Drive scaduta — riconnetti', 'error');
+      _driveUpdateUI(false);
+      driveConnect();
+      return;
+    }
+    throw e;
+  }
+}
+
+// ── Aggiorna UI ────────────────────────────────────────────────
+function _driveUpdateUI(connected) {
+  const statusTxt  = document.getElementById('drive-status-txt');
+  const connectBtn = document.getElementById('drive-connect-btn');
+  const loadBtn    = document.getElementById('drive-load-snap-btn');
+  const uploadBtn  = document.getElementById('drive-upload-csv-btn');
+  const autoBtn    = document.getElementById('drive-auto-btn');
+  const topbarBtn  = document.getElementById('drive-sync-btn');
+  if (!statusTxt) return;
+  if (connected) {
+    const folderId = localStorage.getItem(DRIVE_FOLDER_KEY);
+    statusTxt.innerHTML = '<b style="color:var(--green)">✓ Connesso</b> — cartella: <span style="color:var(--accent)">BudgetDomestico</span>' +
+      (folderId ? '' : ' <span style="color:var(--t3)">(in configurazione...)</span>');
+    connectBtn.textContent = '🔑 Riconnetti';
+    loadBtn.style.display   = '';
+    uploadBtn.style.display = '';
+    autoBtn.style.display   = '';
+    if (topbarBtn) topbarBtn.style.color = 'var(--green)';
+  } else {
+    statusTxt.textContent = 'Non connesso a Google Drive. Premi "Connetti" per autorizzare.';
+    loadBtn.style.display   = 'none';
+    uploadBtn.style.display = 'none';
+    autoBtn.style.display   = 'none';
+    if (topbarBtn) topbarBtn.style.color = '';
+  }
+}
+
+// ── Trova o crea cartella BudgetDomestico su Drive ─────────────
+async function _driveEnsureFolder() {
+  if (!_driveToken) return null;
+  const cached = localStorage.getItem(DRIVE_FOLDER_KEY);
+  if (cached) return cached;
+
+  // Cerca cartella esistente
+  const q = encodeURIComponent(`name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const resp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+    headers: { Authorization: `Bearer ${_driveToken}` }
+  });
+  const data = await resp.json();
+  if (data.files && data.files.length > 0) {
+    localStorage.setItem(DRIVE_FOLDER_KEY, data.files[0].id);
+    _driveUpdateUI(true);
+    return data.files[0].id;
+  }
+
+  // Crea cartella
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${_driveToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const folder = await cr.json();
+  localStorage.setItem(DRIVE_FOLDER_KEY, folder.id);
+  _driveUpdateUI(true);
+  return folder.id;
+}
+
+// ── Carica snapshot da Drive (snapshot.json) ───────────────────
+async function driveLoadSnapshot() {
+  const btn = document.getElementById('drive-load-snap-btn');
+  if (btn) btn.textContent = '⏳ Caricamento...';
+  try {
+    // Auto-refresh token silenzioso
+    await _driveEnsureToken().catch(async () => {
+      await new Promise((res, rej) => {
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPES,
+          callback: (r) => { if (r.error) rej(r.error); else { _driveSaveToken(r.access_token, r.expires_in); _driveUpdateUI(true); res(); } }
+        });
+        client.requestAccessToken();
+      });
+    });
+    // Cerca snapshot.json OVUNQUE su Drive, prende il più recente
+    const q = encodeURIComponent(`name='snapshot.json' and trashed=false`);
+    const resp = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime%20desc`,
+      { headers: { Authorization: `Bearer ${_driveToken}` } }
+    );
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        _driveToken = null; localStorage.removeItem('budget_drive_token');
+        _driveUpdateUI(false);
+        showToast('⚠ Sessione scaduta — riconnetti Drive', 'error'); return;
+      }
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    if (!data.files || !data.files.length) {
+      showToast('⚠ Nessun snapshot.json trovato su Drive. Caricalo prima dal PC.', 'error'); return;
+    }
+
+    const file = data.files[0];
+    const lastLoaded = localStorage.getItem('budget_drive_snap_loaded');
+    if (lastLoaded && new Date(file.modifiedTime) <= new Date(lastLoaded)) {
+      showToast('✓ Snapshot già aggiornato — nessuna novità', 'success'); return;
+    }
+
+    const dlResp = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+      { headers: { Authorization: `Bearer ${_driveToken}` } }
+    );
+    if (!dlResp.ok) throw new Error(`Download fallito: HTTP ${dlResp.status}`);
+    const snap = JSON.parse(await dlResp.text());
+
+    localStorage.setItem(SNAP_KEY, JSON.stringify(snap));
+    localStorage.setItem('budget_drive_snap_loaded', file.modifiedTime);
+    localStorage.setItem(DRIVE_SNAP_KEY, file.id);
+    if (snap.cats) localStorage.setItem(CAT_KEY, JSON.stringify(snap.cats));
+    // Ripristina spese rapide dallo snapshot
+    if (snap.quickItems && snap.quickItems.length > 0) {
+      const localQuick = JSON.parse(localStorage.getItem(QUICK_KEY)||'[]');
+      if (!localQuick.length) {
+        localStorage.setItem(QUICK_KEY, JSON.stringify(snap.quickItems));
+      } else {
+        const localIds = new Set(localQuick.map(q=>q.id));
+        const merged = [...localQuick, ...snap.quickItems.filter(q=>!localIds.has(q.id))];
+        localStorage.setItem(QUICK_KEY, JSON.stringify(merged));
+      }
+    }
+    // ── MERGE INTELLIGENTE: rimuovi record locali già assorbiti dallo snapshot ──
+    _cleanLocalAfterSnapshot(snap);
+    renderSnapshot();
+    renderBilancio();
+    renderQuickGrid();
+    const dt = new Date(file.modifiedTime).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    showToast(`✓ Snapshot aggiornato! (${dt})`, 'success');
+  } catch(e) {
+    showToast('❌ Errore Drive: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.textContent = '📥 Carica snapshot da Drive';
+  }
+}
+
+// ── Upload CSV su Drive ────────────────────────────────────────
+async function driveUploadCSV() {
+  const btn = document.getElementById('drive-upload-csv-btn');
+  if (btn) btn.textContent = '⏳ Upload...';
+  try {
+    await _driveEnsureToken().catch(async (e) => {
+      if (e.message === 'silent_refresh_failed' || !_driveToken) {
+        await new Promise((res, rej) => {
+          const client = google.accounts.oauth2.initTokenClient({
+            client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPES,
+            callback: (r) => { if (r.error) rej(r.error); else { _driveSaveToken(r.access_token, r.expires_in); _driveUpdateUI(true); res(); } }
+          });
+          client.requestAccessToken();
+        });
+      }
+    });
+    const folderId = await _driveEnsureFolder();
+    if (!folderId) { showToast('❌ Cartella Drive non trovata', 'error'); return; }
+
+    // Genera CSV (stessa logica di exportCSV ma senza scaricare)
+    const allRecords = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+    const records = allRecords.filter(r => !r.exported);
+    const DKEY_PRE = 'budget_deleted_log';
+    const delLogPre = JSON.parse(localStorage.getItem(DKEY_PRE)||'[]');
+    if (!records.length && !delLogPre.length) {
+      showToast('⚠ Nessun record né cancellazione da inviare su Drive', 'error');
+      return;
+    }
+
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    const fileName = `budget-mobile-${dateStr}-${timeStr}.csv`;
+
+    // Header identico a exportCSV — compatibile con desktop processIphoneCSV
+    const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
+    const _catsD = getCats();
+    // Aggiungi anche righe CANCELLATO dal log
+    const DKEY3 = 'budget_deleted_log';
+    const delLogD = JSON.parse(localStorage.getItem(DKEY3)||'[]');
+    const rows = records.map(r => {
+      const _arr = r.tipo==='sp' ? _catsD.spese : _catsD.entrate;
+      const cat = _arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
+      const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
+      const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
+      const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
+      return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
+    });
+    const delRowsD = delLogD.map(d => {
+      const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
+      const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
+      return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
+    });
+    const csvContent = [header, ...rows, ...delRowsD].join('\n');
+    const csvBlob = new Blob(['\uFEFF'+csvContent], {type: 'text/csv;charset=utf-8'});
+
+    // Ogni upload crea sempre un file nuovo (nome con timestamp univoco)
+    const boundary = '-------314159265358979323846';
+    const buildMultipart = (metaObj, csvText) => {
+      const metaStr = JSON.stringify(metaObj);
+      const body = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        metaStr,
+        `--${boundary}`,
+        'Content-Type: text/csv; charset=UTF-8',
+        '',
+        csvText,
+        `--${boundary}--`
+      ].join('\r\n');
+      return body;
+    };
+
+    const body = buildMultipart({ name: fileName, parents: [folderId] }, csvContent);
+    const uploadResp = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${_driveToken}`,
+          'Content-Type': `multipart/related; boundary="${boundary}"`
+        },
+        body
+      }
+    );
+    if (!uploadResp.ok) {
+      const errText = await uploadResp.text();
+      throw new Error(`Upload fallito: ${uploadResp.status} — ${errText.slice(0,120)}`);
+    }
+
+    // Marca come esportati e svuota log cancellazioni
+    const DKEY3c = 'budget_deleted_log';
+    localStorage.removeItem(DKEY3c);
+    const updated = allRecords.map(r => records.find(x=>x.id===r.id) ? {...r, exported:true} : r);
+    localStorage.setItem(DB_KEY, JSON.stringify(updated));
+    renderExportStats();
+    const nDel = delLogD.length;
+    showToast(`✓ ${records.length} record + ${nDel} cancellaz. inviati su Drive`, 'success');
+  } catch(e) {
+    showToast('❌ Errore upload Drive: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.textContent = '📤 Invia CSV su Drive';
+  }
+}
+
+// ── Auto Sync: scarica snapshot + eventualmente upload CSV ─────
+async function driveAutoSync() {
+  if (!_driveToken) { driveConnect(); return; }
+  const btn = document.getElementById('drive-sync-btn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    // 1. Carica snapshot aggiornato dal Drive
+    await driveLoadSnapshot();
+    // 2. Controlla record non esportati E cancellazioni pendenti
+    const allRecords = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
+    const toExport   = allRecords.filter(r => !r.exported);
+    const delLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+    const hasData    = toExport.length > 0 || delLog.length > 0;
+    if (hasData) {
+      let msg = '✓ Snapshot aggiornato!\n\n';
+      if (toExport.length > 0) msg += `• ${toExport.length} spese da inviare\n`;
+      if (delLog.length > 0)   msg += `• ${delLog.length} cancellazioni da propagare\n`;
+      msg += '\nVuoi caricarli su Drive adesso?';
+      if (confirm(msg)) {
+        await driveUploadCSV();
+      }
+    } else {
+      showToast('✓ Snapshot aggiornato — nessun dato da inviare');
+    }
+  } finally {
+    if (btn) { btn.textContent = '☁ Drive'; btn.disabled = false; }
+  }
+}
+
+const EXP_KEY   = 'budget_mobile_exported';
+const QUICK_KEY = 'budget_mobile_quick';
+
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem(DB_KEY)||'[]'); } catch(e) { return []; }
+}
+function saveRecords(r) { localStorage.setItem(DB_KEY, JSON.stringify(r)); }
+
+function getCats() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CAT_KEY)||'null');
+    if (c) return c;
+  } catch(e) {}
+  // Categorie di default (compatibili con Access)
+  return {
+    spese: [
+      {ID:1,Nome:'Cibo',Colore:'#1ecf96'},
+      {ID:2,Nome:'Trasporti',Colore:'#4f8ef7'},
+      {ID:3,Nome:'Casa',Colore:'#f5a124'},
+      {ID:4,Nome:'Salute',Colore:'#f0566a'},
+      {ID:5,Nome:'Svago',Colore:'#7c5cf6'},
+      {ID:6,Nome:'Altro',Colore:'#9aa3c2'}
+    ],
+    entrate: [
+      {ID:1,Nome:'Stipendio',Colore:'#1ecf96'},
+      {ID:2,Nome:'Bonus',Colore:'#f5a124'},
+      {ID:3,Nome:'Altro',Colore:'#9aa3c2'}
+    ]
+  };
+}
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let currentPage = 'dashboard';
+let currentType = 'sp';
+let amountStr   = '';
+let selectedCat = null;
+let currentMonth, currentMonthSt;
+
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function ym(dateStr) { return dateStr.slice(0,7); }
+function eur(n) { return n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtDate(d) { const [y,m,g]=d.split('-'); return `${g}/${m}/${y}`; }
+function fmtMonth(ym) {
+  const [y,m] = ym.split('-');
+  const names = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  return `${names[parseInt(m)-1]} ${y}`;
+}
+
+// ══════════════════════════════════════════
+//  NAV
+// ══════════════════════════════════════════
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+page)?.classList.add('active');
+  document.getElementById('nav-'+page)?.classList.add('active');
+  currentPage = page;
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'storico')   renderStorico();
+  if (page === 'export')    renderExportStats();
+  if (page === 'bilancio')  renderBilancio();
+  if (page === 'snapshot')  { const s = getSnapshot(); if(s) renderSnapshot(); }
+  if (page === 'registra')  { renderCatGrid(); renderQuickGrid(); }
+}
+
+// ══════════════════════════════════════════
+//  BILANCIO (da snapshot PC)
+// ══════════════════════════════════════════
+function renderBilancio() {
+  const snap = getSnapshot();
+  const el   = document.getElementById('bilancio-content');
+  if (!snap) {
+    el.innerHTML = `
+      <div class="export-card" style="background:linear-gradient(135deg,rgba(79,142,247,.12),rgba(30,207,150,.08));border-color:rgba(79,142,247,.3)">
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">💰 Bilancio PC</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.5">Carica uno snapshot dal PC per vedere il bilancio completo.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="driveLoadSnapshot()" style="flex:1">☁ Sync da Drive</button>
+        <button class="btn" onclick="document.getElementById('snapshot-input-bil').click()" style="flex:1;background:var(--bg3);color:var(--t2);border:1px solid var(--b2)">📂 Da file</button>
+      </div>
+      <input type="file" id="snapshot-input-bil" accept=".json" style="display:none" onchange="loadSnapshot(event)">`;
+    return;
+  }
+
+  const mesi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  let modo   = localStorage.getItem('bilModoEntrate') || snap.modoEntrate || 'prec';
+
+  // ── Fondi snapshot + record locali ──────────────────────────
+  // Sottrai hidden_snap dai months: record nascosti su mobile ma ancora nello snapshot
+  // Usa i months direttamente (sempre completi) invece di snap.recent (solo 30 record)
+  const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const months = snap.months.map(m => {
+    const mCopy = {...m};
+    hiddenSnapBil.forEach(key => {
+      const parts = key.split('|');
+      if (!(parts[0]||'').startsWith(m.ym)) return;
+      const imp = parseFloat(parts[2]||0) || 0;
+      if (imp <= 0) return;
+      mCopy.spese = Math.max(0, (mCopy.spese||0) - imp);
+      mCopy.saldo = (mCopy.entrate||0) - mCopy.spese;
+      if (mCopy.saldoBil !== null && mCopy.saldoBil !== undefined)
+        mCopy.saldoBil = (mCopy.entratePrec ?? mCopy.entrate) - mCopy.spese;
+    });
+    return mCopy;
+  });
+
+  const localRecords = getRecords();
+  // Chiavi snap per deduplicazione
+  const snapAllKeys = new Set((snap.recent||[]).map(r=>`${r.data}|${r.desc}|${r.importo}`));
+
+  if (localRecords.length) {
+    localRecords
+      .filter(r => !snapAllKeys.has(`${r.data}|${r.desc||''}|${r.importo}`))
+      .forEach(r => {
+        const ymR = r.data.slice(0,7);
+        let mObj  = months.find(m => m.ym === ymR);
+        if (!mObj) {
+          mObj = { ym: ymR, entrate: 0, spese: 0, saldo: 0,
+                   entratePrec: null, saldoBil: null, ymPrec: null };
+          months.push(mObj);
+          months.sort((a,b) => a.ym.localeCompare(b.ym));
+        }
+        if (r.tipo === 'sp') {
+          mObj.spese   += r.importo;
+          mObj.saldo    = mObj.entrate - mObj.spese;
+          if (mObj.saldoBil !== null) mObj.saldoBil = (mObj.entratePrec ?? mObj.entrate) - mObj.spese;
+        } else {
+          mObj.entrate += r.importo;
+          mObj.saldo    = mObj.entrate - mObj.spese;
+        }
+      });
+  }
+
+  const last6        = months.slice(-6);
+  const annoCorrente = new Date().getFullYear().toString();
+  const mesiAnno     = months.filter(m => m.ym.startsWith(annoCorrente));
+  const ytdEntrate   = mesiAnno.reduce((s,m) => s + m.entrate, 0);
+  const ytdSpese     = mesiAnno.reduce((s,m) => s + m.spese,   0);
+  const ytdSaldoCorr = mesiAnno.reduce((s,m) => s + m.saldo,   0);
+  const ytdSaldoBil  = mesiAnno.reduce((s,m) => s + (m.saldoBil ?? m.saldo), 0);
+  const ytdSaldo     = modo === 'prec' ? ytdSaldoBil : ytdSaldoCorr;
+
+  const expDate = new Date(snap.exportedAt).toLocaleDateString('it-IT',
+    {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  const nowYM      = today().slice(0,7);
+  const localThisM = localRecords.filter(r => r.data.startsWith(nowYM));
+  const localBadge = localThisM.length
+    ? `<span style="background:rgba(245,161,36,.2);color:var(--amber);border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;margin-left:6px">+${localThisM.length} mobile</span>`
+    : '';
+
+  const getSaldo = m => modo === 'prec' ? (m.saldoBil ?? m.saldo) : m.saldo;
+  const getEn    = m => modo === 'prec' ? (m.entratePrec ?? m.entrate) : m.entrate;
+  const getEnLbl = m => {
+    if (modo !== 'prec') return mesi[parseInt(m.ym.split('-')[1])-1];
+    if (m.ymPrec) return mesi[parseInt(m.ymPrec.split('-')[1])-1] + ' ' + m.ymPrec.split('-')[0];
+    return 'Prec.';
+  };
+
+  const toggleHtml = `
+    <div style="display:flex;gap:0;border:1px solid rgba(255,255,255,.15);border-radius:8px;overflow:hidden;margin-bottom:14px;font-size:12px;font-weight:700">
+      <button onclick="setBilModo('prec')"
+        style="flex:1;padding:8px;border:none;cursor:pointer;transition:all .15s;background:${modo==='prec'?'var(--accent)':'transparent'};color:${modo==='prec'?'#fff':'var(--t3)'}">
+        📅 Mese Prec.
+      </button>
+      <button onclick="setBilModo('corrente')"
+        style="flex:1;padding:8px;border:none;cursor:pointer;transition:all .15s;background:${modo==='corrente'?'var(--green)':'transparent'};color:${modo==='corrente'?'#fff':'var(--t3)'}">
+        📆 Stesso Mese
+      </button>
+    </div>`;
+
+  const maxVal = Math.max(...last6.map(m => Math.max(getEn(m), m.spese)), 1);
+  const bars   = last6.map(m => {
+    const [y,mo] = m.ym.split('-');
+    const label  = mesi[parseInt(mo)-1];
+    const hSp    = Math.round((m.spese/maxVal)*60);
+    const hEn    = Math.round((getEn(m)/maxVal)*60);
+    const sal    = getSaldo(m);
+    const sColor = sal >= 0 ? 'var(--green)' : 'var(--red)';
+    const sVal   = Math.abs(sal) >= 1000
+      ? (sal<0?'-':'')+(Math.abs(sal)/1000).toFixed(1)+'k'
+      : Math.round(sal);
+    const hasLocal = localRecords.some(r => r.data.startsWith(m.ym));
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;${hasLocal?'outline:2px solid var(--amber);border-radius:4px;':''}">
+      <div style="font-size:9px;color:${hasLocal?'var(--amber)':'var(--t3)'};font-weight:700">${label}</div>
+      <div style="display:flex;gap:2px;align-items:flex-end;height:64px">
+        <div style="width:10px;height:${hEn}px;background:var(--green);border-radius:3px 3px 0 0;opacity:.85"></div>
+        <div style="width:10px;height:${hSp}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.85"></div>
+      </div>
+      <div style="font-size:9px;color:${sColor};font-weight:700">${sVal}</div>
+    </div>`;
+  }).join('');
+
+  const lastM     = months.at(-1);
+  const lastSal   = getSaldo(lastM);
+  const lastEn    = getEn(lastM);
+  const lastEnLbl = getEnLbl(lastM);
+  const bilCol    = lastSal >= 0 ? 'var(--green)' : 'var(--red)';
+
+  const cats = getCats();
+  const topCatMap = {};
+  (snap.topCat||[]).forEach(c => { topCatMap[c.nome] = {...c}; });
+  localThisM.filter(r=>r.tipo==='sp').forEach(r => {
+    const cat = cats.spese.find(c=>c.ID===r.idCat) || {Nome:'Altro', Colore:'#9aa3c2'};
+    if (topCatMap[cat.Nome]) topCatMap[cat.Nome].totale += r.importo;
+    else topCatMap[cat.Nome] = {nome:cat.Nome, colore:cat.Colore, totale:r.importo};
+  });
+  const topCatSorted = Object.values(topCatMap).sort((a,b)=>b.totale-a.totale);
+  const topCatHtml   = topCatSorted.map(c => {
+    const pct = lastM.spese > 0 ? Math.round(c.totale/lastM.spese*100) : 0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="width:10px;height:10px;border-radius:50%;background:${c.colore};flex-shrink:0"></div>
+      <div style="flex:1;font-size:13px">${c.nome}</div>
+      <div style="font-size:12px;color:var(--t3)">${pct}%</div>
+      <div style="font-size:13px;font-weight:700;color:var(--red)">€ ${eur(c.totale)}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:11px;color:var(--t3)">Snapshot PC</div>
+        <div style="font-size:12px;font-weight:600">${expDate}</div>
+      </div>
+      <button class="btn" style="padding:7px 12px;font-size:11px;background:var(--bg3);color:var(--accent);border:1px solid var(--accent);width:auto"
+        onclick="document.getElementById('snapshot-input-bil2').click()">🔄 Aggiorna</button>
+      <input type="file" id="snapshot-input-bil2" accept=".json" style="display:none" onchange="loadSnapshot(event)">
+    </div>
+
+    ${toggleHtml}
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">
+        ANNO ${annoCorrente} — RIEPILOGO${localBadge}
+      </div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1;text-align:center">
+          <div style="font-size:10px;color:var(--t3)">Entrate</div>
+          <div style="font-size:16px;font-weight:800;color:var(--green)">€ ${ytdEntrate>=1000?(ytdEntrate/1000).toFixed(1)+'k':eur(ytdEntrate)}</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div style="font-size:10px;color:var(--t3)">Uscite</div>
+          <div style="font-size:16px;font-weight:800;color:var(--red)">€ ${ytdSpese>=1000?(ytdSpese/1000).toFixed(1)+'k':eur(ytdSpese)}</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div style="font-size:10px;color:var(--t3)">Saldo</div>
+          <div style="font-size:16px;font-weight:800;color:${ytdSaldo>=0?'var(--green)':'var(--red)'}">
+            ${ytdSaldo<0?'-':''}€ ${Math.abs(ytdSaldo)>=1000?(Math.abs(ytdSaldo)/1000).toFixed(1)+'k':eur(Math.abs(ytdSaldo))}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">ULTIMI 6 MESI</div>
+      <div style="display:flex;gap:4px;align-items:flex-end">${bars}</div>
+      <div style="display:flex;gap:8px;margin-top:8px;justify-content:center;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--green);border-radius:2px"></div>${modo==='prec'?'Entr. rif.':'Entrate'}</div>
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--red);border-radius:2px"></div>Uscite</div>
+        ${localRecords.length?'<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--amber)">⬤ dati mobile</div>':''}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:8px">
+        MESE CORRENTE — ${mesi[parseInt(lastM.ym.split('-')[1])-1]} ${lastM.ym.split('-')[0]}${localBadge}
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--t3)">Entr. rif. (${lastEnLbl})</div>
+          <div style="font-size:15px;font-weight:800;color:var(--green)">€ ${eur(lastEn)}</div>
+        </div>
+        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--t3)">Uscite</div>
+          <div style="font-size:15px;font-weight:800;color:var(--red)">€ ${eur(lastM.spese)}</div>
+        </div>
+      </div>
+      <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--t3);margin-bottom:2px">BILANCIO</div>
+        <div style="font-size:22px;font-weight:800;color:${bilCol}">${lastSal<0?'-':''}€ ${eur(Math.abs(lastSal))}</div>
+      </div>
+    </div>
+
+    ${topCatSorted.length ? `
+    <div class="card">
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE — MESE CORRENTE</div>
+      ${topCatHtml}
+    </div>` : ''}`;
+}
+
+
+
+function setBilModo(modo) {
+  localStorage.setItem('bilModoEntrate', modo);
+  renderBilancio();
+}
+
+// ══════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════
+function initMonth() {
+  const d = new Date();
+  currentMonth   = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  currentMonthSt = currentMonth;
+}
+
+function changeMonth(dir) {
+  const [y,m] = currentMonth.split('-').map(Number);
+  const nd = new Date(y, m-1+dir, 1);
+  currentMonth = `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}`;
+  renderDashboard();
+}
+function changeMonthSt(dir) {
+  const [y,m] = currentMonthSt.split('-').map(Number);
+  const nd = new Date(y, m-1+dir, 1);
+  currentMonthSt = `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}`;
+  renderStorico();
+}
+
+function renderDashboard() {
+  const snap         = getSnapshot();
+  const localRecords = getRecords();
+  const cats         = getCats();
+
+  // ── Somma snap + record locali per il mese visualizzato ──
+  let totEn = 0, totSp = 0;
+
+  // Record cancellati/nascosti del mese corrente
+  const hiddenSnapDash = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const deletedLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  const deletedThisMonth = deletedLog.filter(r => r.data && r.data.startsWith(currentMonth));
+
+  if (snap) {
+    const mSnap = snap.months.find(m => m.ym === currentMonth);
+    if (mSnap) { totEn = mSnap.entrate || 0; totSp = mSnap.spese || 0; }
+
+    // Sottrai hidden_snap dal totale del mese corrente
+    // Usa i months (completi) non snap.recent (solo 30 record)
+    hiddenSnapDash.forEach(key => {
+      const parts = key.split('|');
+      if (!(parts[0]||'').startsWith(currentMonth)) return;
+      const imp = parseFloat(parts[2]||0) || 0;
+      if (imp > 0) totSp = Math.max(0, totSp - imp);
+    });
+  }
+
+  // Aggiunge i record locali del mese SOLO se non già presenti nello snap
+  const localMonth = localRecords.filter(r => ym(r.data) === currentMonth);
+  const snapMonthKeys = new Set(
+    snap ? (snap.recent||[])
+      .filter(r => r.data && r.data.startsWith(currentMonth))
+      .map(r => `${r.data}|${r.desc}|${r.importo}`) : []
+  );
+  const localMonthDeduped = localMonth.filter(r =>
+    !snapMonthKeys.has(`${r.data}|${r.desc||''}|${r.importo}`)
+  );
+  totEn += localMonthDeduped.filter(r=>r.tipo==='en').reduce((s,r)=>s+r.importo, 0);
+  totSp += localMonthDeduped.filter(r=>r.tipo==='sp').reduce((s,r)=>s+r.importo, 0);
+
+  // Sottrai anche i record locali già cancellati (che erano stati aggiunti ai totali)
+  // (sono già stati rimossi da localRecords, ma se erano stati già sommati prima della cancellazione
+  //  il deletedLog li traccia — in realtà non serve qui perché saveRecords li rimuove subito)
+  // → i totali sono già corretti grazie a localMonthDeduped che usa localRecords aggiornati
+
+  const saldo = totEn - totSp;
+  const pct   = totEn > 0 ? Math.min(100, (saldo/totEn)*100) : 0;
+
+  document.getElementById('month-label').textContent = fmtMonth(currentMonth);
+  document.getElementById('kpi-en').textContent  = '€ ' + eur(totEn);
+  document.getElementById('kpi-sp').textContent  = '€ ' + eur(totSp);
+  const sEl = document.getElementById('kpi-saldo');
+  sEl.textContent = (saldo<0?'-':'') + '€ ' + eur(Math.abs(saldo));
+  sEl.style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('kpi-bar').style.width      = Math.max(0,pct) + '%';
+  document.getElementById('kpi-bar').style.background = pct >= 20 ? 'var(--green)' : pct >= 0 ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('kpi-pct').textContent      = pct.toFixed(1) + '% di risparmio';
+
+  // ── Transazioni recenti: snap + locali mescolati e ordinati ──
+  const el = document.getElementById('recent-list');
+
+  // Converti record locali nel formato display
+  const localForDisplay = localMonth.map(r => {
+    const arr = r.tipo==='sp' ? cats.spese : cats.entrate;
+    const cat = arr.find(c=>c.ID===r.idCat) || {Nome:'Mobile',Colore:'#f5a124'};
+    return { data:r.data, desc:r.desc||'—', catNome:cat.Nome,
+             catColore:cat.Colore, importo:r.importo,
+             tipo: r.tipo==='sp'?'spesa':'entrata', _local:true, _id:r.id };
+  });
+
+  // Prendi transazioni snap del mese (o tutte se è il mese corrente dello snap)
+  const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  let snapTx = [];
+  if (snap) {
+    snapTx = (snap.recent||[])
+      .filter(r => r.data && r.data.startsWith(currentMonth))
+      .filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)));
+    if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
+      snapTx = (snap.recent||[]).filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)));
+  }
+
+  // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
+  const snapKeys = new Set(snapTx.map(r => `${r.data}|${r.desc}|${r.importo}`));
+  const localDeduped = localForDisplay.filter(r => !snapKeys.has(`${r.data}|${r.desc}|${r.importo}`));
+
+  const allTx = [...snapTx, ...localDeduped]
+    .sort((a,b) => b.data.localeCompare(a.data))
+    .slice(0, 20);
+
+  if (!allTx.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>';
+  } else {
+    window._snapTxCache = snapTx;
+    el.innerHTML = allTx.map((r, idx) => {
+      const sign = r.tipo==='spesa' ? '-' : '+';
+      const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
+      const mobileBadge = r._local
+        ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
+      // Usa chiave normalizzata — non l'indice numerico che può essere -1 per mismatch importo
+      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2));
+      const deleteBtn = r._local
+        ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
+        : `<button class="tx-delete-btn" onclick="deleteSnapRecordByKey(event,'${snapKey}')" style="opacity:.6">✕</button>`;
+      return `<div class="tx-item" onclick="toggleDel(this)">
+        <div class="tx-dot" style="background:${r.catColore||'#9aa3c2'}"></div>
+        <div class="tx-info">
+          <div class="tx-desc">${r.desc}${mobileBadge}</div>
+          <div class="tx-meta"><span class="badge" style="background:${r.catColore||'#9aa3c2'}22;color:${r.catColore||'#9aa3c2'}">${r.catNome||'—'}</span> · ${fmtDate(r.data)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="tx-amount" style="color:${col}">${sign} € ${eur(r.importo)}</div>
+          ${deleteBtn}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Topbar ──
+  const snapBadge  = snap ? ` · 📊 PC ${new Date(snap.exportedAt).toLocaleDateString('it-IT')}` : '';
+  const localCount = localRecords.length;
+  const snapCount  = snap ? (snap.recent||[]).length : 0;
+  const total      = snapCount + localCount;
+  document.getElementById('topbar-sub').textContent = total + ' record' + snapBadge +
+    (localCount ? ` +${localCount}📱` : '');
+}
+
+function toggleDel(el) {
+  document.querySelectorAll('.tx-item.show-del').forEach(e => { if(e!==el) e.classList.remove('show-del'); });
+  el.classList.toggle('show-del');
+}
+
+// Aggiorna visivamente la pagina corrente dopo modifica dati
+function _refreshCurrentPage() {
+  renderDashboard();
+  if (currentPage === 'storico')   renderStorico();
+  if (currentPage === 'bilancio')  renderBilancio();
+  if (currentPage === 'spese-rapide') renderQuick();
+}
+
+function deleteSnapRecordByKey(e, encodedKey) {
+  e.stopPropagation();
+  const key = encodedKey.replace(/\|([^|]+)\|/, (m, desc) => '|' + decodeURIComponent(desc) + '|');
+  if (!key) { showToast('⚠ Chiave record non valida'); return; }
+  if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
+  const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  if (!hidden.includes(key)) {
+    hidden.push(key);
+    localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
+  }
+  // Estrai dati dalla chiave per il log cancellazioni
+  const parts = key.split('|');
+  const DKEY = 'budget_deleted_log';
+  const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
+  log.push({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'',
+             importo:parseFloat(parts[2]||0), idCat:null, note:'', deletedAt:new Date().toISOString() });
+  localStorage.setItem(DKEY, JSON.stringify(log));
+  showToast('✓ Nascosto — incluso nel prossimo sync Drive');
+  _refreshCurrentPage();
+  if (typeof renderBilancio === 'function') renderBilancio();
+}
+
+function deleteRecord(e, localId, snapKey) {
+  e.stopPropagation();
+  const DKEY = 'budget_deleted_log';
+  if (localId) {
+    const rec = getRecords().find(r => r.id === localId);
+    if (rec) {
+      const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
+      log.push({ tipo:rec.tipo, data:rec.data, desc:rec.desc||'', importo:rec.importo,
+                 idCat:rec.idCat, note:rec.note||'', deletedAt:new Date().toISOString() });
+      localStorage.setItem(DKEY, JSON.stringify(log));
+    }
+    saveRecords(getRecords().filter(r => r.id !== localId));
+    showToast('✓ Record eliminato');
+    _refreshCurrentPage();
+  } else if (snapKey) {
+    if (!confirm('Nascondere questa transazione?\n(verrà inclusa come cancellazione nel prossimo CSV)')) return;
+    const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+    if (!hidden.includes(snapKey)) { hidden.push(snapKey); localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden)); }
+    const parts = snapKey.split('|');
+    const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
+    log.push({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'', importo:parseFloat(parts[2])||0,
+               idCat:null, note:'', deletedAt:new Date().toISOString() });
+    localStorage.setItem(DKEY, JSON.stringify(log));
+    showToast('✓ Nascosto — incluso nel prossimo export CSV');
+    _refreshCurrentPage();
+  }
+}
+
+// ══════════════════════════════════════════
+//  STORICO
+// ══════════════════════════════════════════
+function renderStorico() {
+  document.getElementById('month-label-st').textContent = fmtMonth(currentMonthSt);
+  const records = getRecords().filter(r => ym(r.data) === currentMonthSt);
+  const cats = getCats();
+  const el = document.getElementById('storico-list');
+  if (!records.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione</div></div>';
+    return;
+  }
+  const sorted = [...records].sort((a,b) => b.data.localeCompare(a.data));
+  el.innerHTML = sorted.map(r => {
+    const arr = r.tipo==='sp' ? cats.spese : cats.entrate;
+    const cat = arr.find(c=>c.ID===r.idCat) || {Nome:'—',Colore:'#9aa3c2'};
+    const sign = r.tipo==='sp' ? '-' : '+';
+    const col  = r.tipo==='sp' ? 'var(--red)' : 'var(--green)';
+    return `<div class="tx-item" style="margin-bottom:8px" onclick="toggleDel(this)" data-id="${r.id}">
+      <div class="tx-dot" style="background:${cat.Colore}"></div>
+      <div class="tx-info">
+        <div class="tx-desc">${r.desc || '—'}</div>
+        <div class="tx-meta"><span class="badge" style="background:${cat.Colore}22;color:${cat.Colore}">${cat.Nome}</span> · ${fmtDate(r.data)}${r.note?' · '+r.note:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="tx-amount" style="color:${col}">${sign} € ${eur(r.importo)}</div>
+        <button class="tx-delete-btn" onclick="deleteRecord(event,'${r.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+//  SPESE RAPIDE
+// ══════════════════════════════════════════
+function getQuick() {
+  try { return JSON.parse(localStorage.getItem(QUICK_KEY)||'[]'); } catch(e) { return []; }
+}
+function saveQuickList(list) { localStorage.setItem(QUICK_KEY, JSON.stringify(list)); }
+
+function renderQuickGrid() {
+  const list = getQuick();
+  const grid = document.getElementById('quick-grid');
+  const empty = document.getElementById('quick-empty');
+  if (!list.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  grid.innerHTML = list.map(q => `
+    <button class="quick-btn" onclick="tapQuick('${q.id}')">
+      <div class="q-emoji">${q.emoji||'💸'}</div>
+      <div class="q-name">${q.nome}</div>
+      <div class="q-price">${q.importo>0?'€ '+eur(q.importo):'variabile'}</div>
+    </button>`).join('');
+}
+
+function tapQuick(id) {
+  const list = getQuick();
+  const q = list.find(x => x.id === id);
+  if (!q) return;
+
+  const doSave = (importo) => {
+    if (!importo || importo <= 0) { showToast('⚠ Importo non valido'); return; }
+    const record = {
+      id: genId(), tipo: 'sp', data: today(),
+      desc: q.desc || q.nome, importo,
+      idCat: q.idCat, note: '', exported: false,
+      createdAt: new Date().toISOString()
+    };
+    const records = getRecords();
+    records.push(record);
+    saveRecords(records);
+    showToast(`✓ ${q.emoji||'💸'} ${q.nome} — € ${eur(importo)} registrato`);
+    if (currentPage === 'dashboard') renderDashboard();
+    if (getSnapshot()) renderBilancio();
+  };
+
+  if (q.importo > 0) {
+    // Importo fisso: salva subito con conferma toast
+    doSave(q.importo);
+  } else {
+    // Importo variabile: chiede l'importo
+    const val = prompt(`${q.emoji||'💸'} ${q.nome}\nInserisci importo (€):`);
+    if (val === null) return;
+    const n = parseFloat(val.replace(',','.'));
+    doSave(n);
+  }
+}
+
+function openQuickEdit() {
+  renderQuickEditList();
+  document.getElementById('modal-quick').style.display = 'flex';
+}
+function closeQuickEdit() {
+  document.getElementById('modal-quick').style.display = 'none';
+  renderQuickGrid();
+}
+
+function renderQuickEditList() {
+  const list = getQuick();
+  const el = document.getElementById('quick-list-edit');
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--t3);font-size:13px;padding:16px">Nessuna spesa rapida ancora</div>';
+    return;
+  }
+  el.innerHTML = list.map(q => `
+    <div class="quick-edit-item">
+      <div style="font-size:22px">${q.emoji||'💸'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${q.nome}</div>
+        <div style="font-size:11px;color:var(--t3)">${q.importo>0?'€ '+eur(q.importo)+' fisso':'Importo variabile'}</div>
+      </div>
+      <button onclick="editQuick('${q.id}')" style="background:none;border:none;color:var(--accent);font-size:18px;cursor:pointer;padding:4px">✏️</button>
+      <button onclick="deleteQuick('${q.id}')" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:4px">🗑</button>
+    </div>`).join('');
+}
+
+function deleteQuick(id) {
+  const list = getQuick().filter(q => q.id !== id);
+  saveQuickList(list);
+  renderQuickEditList();
+}
+
+function openAddQuick() {
+  document.getElementById('qf-id').value = '';
+  document.getElementById('qf-emoji').value = '';
+  document.getElementById('qf-nome').value = '';
+  document.getElementById('qf-importo').value = '';
+  document.getElementById('qf-desc').value = '';
+  document.getElementById('quick-form-title').textContent = 'Nuova Spesa Rapida';
+  _fillQuickCatSelect(null);
+  document.getElementById('modal-quick-form').style.display = 'flex';
+}
+
+function editQuick(id) {
+  const q = getQuick().find(x => x.id === id);
+  if (!q) return;
+  document.getElementById('qf-id').value = q.id;
+  document.getElementById('qf-emoji').value = q.emoji||'';
+  document.getElementById('qf-nome').value = q.nome;
+  document.getElementById('qf-importo').value = q.importo||'';
+  document.getElementById('qf-desc').value = q.desc||'';
+  document.getElementById('quick-form-title').textContent = 'Modifica Spesa Rapida';
+  _fillQuickCatSelect(q.idCat);
+  document.getElementById('modal-quick-form').style.display = 'flex';
+}
+
+function _fillQuickCatSelect(selectedId) {
+  const cats = getCats().spese;
+  const sel  = document.getElementById('qf-cat');
+  sel.innerHTML = cats.map(c =>
+    `<option value="${c.ID}" ${c.ID==selectedId?'selected':''}>${c.Nome}</option>`
+  ).join('');
+}
+
+function closeQuickForm() {
+  document.getElementById('modal-quick-form').style.display = 'none';
+}
+
+function saveQuick() {
+  const nome = document.getElementById('qf-nome').value.trim();
+  if (!nome) { showToast('⚠ Inserisci un nome'); return; }
+  const id      = document.getElementById('qf-id').value || genId();
+  const emoji   = document.getElementById('qf-emoji').value.trim() || '💸';
+  const importo = parseFloat(document.getElementById('qf-importo').value)||0;
+  const idCat   = parseInt(document.getElementById('qf-cat').value);
+  const desc    = document.getElementById('qf-desc').value.trim();
+
+  const list = getQuick();
+  const idx  = list.findIndex(q => q.id === id);
+  const item = { id, emoji, nome, importo, idCat, desc };
+  if (idx >= 0) list[idx] = item; else list.push(item);
+  saveQuickList(list);
+  closeQuickForm();
+  renderQuickEditList();
+  showToast('✓ Spesa rapida salvata');
+}
+
+// ══════════════════════════════════════════
+//  REGISTRA
+// ══════════════════════════════════════════
+function setType(t) {
+  currentType = t;
+  selectedCat = null;
+  const btnSp = document.getElementById('btn-sp');
+  const btnEn = document.getElementById('btn-en');
+  const disp  = document.getElementById('amount-display');
+  const salva = document.getElementById('btn-salva');
+  const ok    = document.querySelector('.numpad-btn.ok');
+  btnSp.className = 'type-btn' + (t==='sp'?' active-sp':'');
+  btnEn.className = 'type-btn' + (t==='en'?' active-en':'');
+  disp.className  = 'amount-display ' + t;
+  salva.textContent = t==='sp' ? '+ Aggiungi Uscita' : '+ Aggiungi Entrata';
+  salva.style.background = t==='sp' ? 'var(--red)' : 'var(--green)';
+  salva.style.color = t==='en' ? '#1e2235' : '#fff';
+  if (ok) { ok.className = 'numpad-btn ok ' + t; }
+  renderCatGrid();
+  updateAmountDisplay();
+}
+
+function numpad(key) {
+  if (key === 'del') { amountStr = amountStr.slice(0,-1); }
+  else if (key === '.') { if (!amountStr.includes('.')) amountStr += '.'; }
+  else {
+    const parts = amountStr.split('.');
+    if (parts[1] !== undefined && parts[1].length >= 2) return;
+    if (amountStr === '0' && key !== '.') amountStr = key;
+    else amountStr += key;
+  }
+  updateAmountDisplay();
+}
+
+function updateAmountDisplay() {
+  const n = parseFloat(amountStr) || 0;
+  document.getElementById('amount-display').textContent = '€ ' + eur(n);
+}
+
+function renderCatGrid() {
+  const cats = getCats();
+  const arr  = currentType === 'sp' ? cats.spese : cats.entrate;
+  const el   = document.getElementById('cat-select');
+  if (!el) return;
+  el.innerHTML = '<option value="">— Seleziona categoria —</option>' +
+    arr.map(c => `<option value="${c.ID}" ${selectedCat===c.ID?'selected':''}>${c.Nome}</option>`).join('');
+}
+
+function selectCat(id) {
+  selectedCat = id;
+  const el = document.getElementById('cat-select');
+  if (el) el.value = id;
+}
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function salvaRecord() {
+  const importo = parseFloat(amountStr);
+  if (!importo || importo <= 0) { showToast('⚠ Inserisci un importo'); return; }
+  const desc = document.getElementById('reg-desc').value.trim();
+  if (!desc) { showToast('⚠ Inserisci una descrizione'); return; }
+  if (!selectedCat) { showToast('⚠ Seleziona una categoria'); return; }
+  const dataVal = document.getElementById('reg-data').value || today();
+  const note    = document.getElementById('reg-note').value.trim();
+
+  const record = {
+    id:        genId(),
+    tipo:      currentType,
+    data:      dataVal,
+    desc,
+    importo,
+    idCat:     selectedCat,
+    note,
+    exported:  false,
+    createdAt: new Date().toISOString()
+  };
+
+  const records = getRecords();
+  records.push(record);
+  saveRecords(records);
+
+  // Reset
+  amountStr   = '';
+  selectedCat = null;
+  document.getElementById('reg-desc').value = '';
+  document.getElementById('reg-note').value = '';
+  document.getElementById('reg-data').value = today();
+  updateAmountDisplay();
+  renderCatGrid();
+
+  const sign = currentType === 'sp' ? '-' : '+';
+  showToast(`✓ ${sign} € ${eur(importo)} registrato`);
+  // Aggiorna bilancio in background se snapshot presente
+  if (getSnapshot()) renderBilancio();
+}
+
+// ══════════════════════════════════════════
+//  SNAPSHOT DAL PC
+// ══════════════════════════════════════════
+const SNAP_KEY = 'budget_mobile_snapshot';
+
+function getSnapshot() {
+  try { return JSON.parse(localStorage.getItem(SNAP_KEY)||'null'); } catch(e) { return null; }
+}
+
+// ── Merge intelligente: rimuove dal localStorage i record già assorbiti dallo snapshot ──
+// Logica:
+// - Record locale = "già assorbito" se esiste nello snapshot con stessa data+desc+importo
+// - Record locale = "genuinamente nuovo" se la sua data è POSTERIORE all'ultima data nello snapshot
+//   oppure se non compare mai nello snapshot (non ancora esportato)
+function _cleanLocalAfterSnapshot(snap) {
+  // Svuota hidden_snap — se lo snapshot è aggiornato, i record cancellati
+  // non ci sono già più. Tenere hidden_snap causa bilancio sbagliato.
+  localStorage.removeItem('budget_hidden_snap');
+
+  const locals = getRecords();
+  if (!locals.length) return;
+
+  // Data dell'ultimo export — record locali con exported=true anteriori a questa data
+  // sono già stati assorbiti dal desktop
+  const snapDate = snap.exportedAt ? snap.exportedAt.slice(0,10) : '1970-01-01';
+
+  // Costruisci set di tutti i record presenti nello snapshot (data|desc|importo)
+  // Usa snap.recent per il match diretto — se il record locale è già nello snapshot
+  // significa che il desktop lo ha già processato → rimuovilo dal localStorage
+  const snapTxAll = snap.allRecords || snap.recent || [];
+  const snapKeySet = new Set(snapTxAll.map(r =>
+    `${r.data||r.Data}|${(r.desc||r.Descrizione||'').trim().toLowerCase()}|${parseFloat(r.importo||r.Importo||0).toFixed(2)}`
+  ));
+
+  const cleaned = locals.filter(r => {
+    // Controlla se il record locale è già presente nello snapshot (confronto triplo)
+    const key = `${r.data}|${(r.desc||'').trim().toLowerCase()}|${parseFloat(r.importo||0).toFixed(2)}`;
+    if (snapKeySet.has(key)) return false; // già nello snapshot → rimuovi
+
+    // Se il record è stato esportato (exported:true), il desktop lo ha già processato
+    // → rimuovilo sempre, indipendentemente dalla data (copre anche i post-datati)
+    if (r.exported) return false;
+
+    // Record genuinamente nuovo (non ancora esportato) → tienilo
+    return true;
+  });
+
+  if (cleaned.length !== locals.length) {
+    saveRecords(cleaned);
+    console.log(`[merge] Rimossi ${locals.length - cleaned.length} record già assorbiti (exported + data <= ${snapDate})`);
+  }
+
+  // Pulisci budget_hidden_snap: rimuovi chiavi di record non più presenti nello snapshot
+  // Quando il desktop cancella un record e rifà lo snapshot, quel record sparisce dallo snap.
+  // Se la chiave rimane in hidden_snap, il bilancio lo sottrae di nuovo causando importo errato.
+  const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  if (hidden.length) {
+    // Costruisci set di tutte le chiavi data|desc|importo presenti nello snapshot
+    const snapAllTx = snap.allRecords || snap.recent || [];
+    // Aggiungi anche chiavi dai dati mensili aggregati (snap.months non ha dettaglio tx)
+    const snapKeySet = new Set(snapAllTx.map(r =>
+      `${r.data||r.Data}|${(r.desc||r.Descrizione||'').trim().toLowerCase()}|${parseFloat(r.importo||r.Importo||0).toFixed(2)}`
+    ));
+    // Mantieni solo le chiavi hidden che sono ancora presenti nello snapshot
+    // (quelle non più presenti sono già state cancellate sul desktop)
+    const cleanedHidden = hidden.filter(key => {
+      const parts = key.split('|');
+      if (parts.length < 3) return false;
+      const normalizedKey = `${parts[0]}|${(parts[1]||'').trim().toLowerCase()}|${parseFloat(parts[2]||0).toFixed(2)}`;
+      return snapKeySet.has(normalizedKey);
+    });
+    if (cleanedHidden.length !== hidden.length) {
+      localStorage.setItem('budget_hidden_snap', JSON.stringify(cleanedHidden));
+      console.log(`[merge] Pulite ${hidden.length - cleanedHidden.length} chiavi hidden non più nello snapshot`);
+    }
+  }
+}
+
+function loadSnapshot(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const snap = JSON.parse(ev.target.result);
+      if (!snap.version || !snap.months) { showToast('⚠ File non valido'); return; }
+      localStorage.setItem(SNAP_KEY, JSON.stringify(snap));
+      // Aggiorna categorie dallo snapshot
+      if (snap.cats) localStorage.setItem(CAT_KEY, JSON.stringify(snap.cats));
+      // Ripristina spese rapide dallo snapshot (solo se presenti e locali sono vuote)
+      if (snap.quickItems && snap.quickItems.length > 0) {
+        const localQuick = JSON.parse(localStorage.getItem(QUICK_KEY)||'[]');
+        if (!localQuick.length) {
+          localStorage.setItem(QUICK_KEY, JSON.stringify(snap.quickItems));
+        } else {
+          // Merge: aggiungi quelle dello snap che non esistono già (per ID)
+          const localIds = new Set(localQuick.map(q=>q.id));
+          const merged = [...localQuick, ...snap.quickItems.filter(q=>!localIds.has(q.id))];
+          localStorage.setItem(QUICK_KEY, JSON.stringify(merged));
+        }
+      }
+      // ── MERGE INTELLIGENTE: rimuovi record locali già assorbiti dallo snapshot ──
+      _cleanLocalAfterSnapshot(snap);
+      renderSnapshot();
+      renderCatGrid();
+      if (currentPage === 'bilancio')  renderBilancio();
+      if (currentPage === 'dashboard') renderDashboard();
+      showToast('✓ Snapshot caricato — dati aggiornati!');
+    } catch(err) { showToast('⚠ Errore lettura file'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function renderSnapshot() {
+  const snap = getSnapshot();
+  const el   = document.getElementById('snapshot-content');
+  if (!snap) return;
+
+  const expDate = new Date(snap.exportedAt);
+  const fmtExp  = expDate.toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const mesi    = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+  // Barre mesi: merge snap + locali
+  const localAll = getRecords();
+  const snapMonths = snap.months.map(m => {
+    const localM = localAll.filter(r => r.data.startsWith(m.ym));
+    const addSp  = localM.filter(r=>r.tipo==='sp').reduce((s,r)=>s+r.importo,0);
+    const addEn  = localM.filter(r=>r.tipo==='en').reduce((s,r)=>s+r.importo,0);
+    return {...m, spese: m.spese+addSp, entrate: m.entrate+addEn,
+            saldo: m.saldo - addSp + addEn, _hasLocal: localM.length>0};
+  });
+  const maxVal = Math.max(...snapMonths.map(m => Math.max(m.spese, m.entrate)), 1);
+  const monthBars = snapMonths.map(m => {
+    const [y,mo] = m.ym.split('-');
+    const label  = mesi[parseInt(mo)-1];
+    const hSp    = Math.round((m.spese/maxVal)*60);
+    const hEn    = Math.round((m.entrate/maxVal)*60);
+    const sColor = m.saldo >= 0 ? 'var(--green)' : 'var(--red)';
+    const lColor = m._hasLocal ? 'var(--amber)' : 'var(--t3)';
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="font-size:9px;color:${lColor};font-weight:600">${label}</div>
+      <div style="display:flex;gap:2px;align-items:flex-end;height:64px">
+        <div style="width:10px;height:${hEn}px;background:var(--green);border-radius:3px 3px 0 0;opacity:.8"></div>
+        <div style="width:10px;height:${hSp}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.8"></div>
+      </div>
+      <div style="font-size:9px;color:${sColor};font-weight:700">${m.saldo>=0?'+':''}${Math.abs(m.saldo)>=1000?(m.saldo<0?'-':'')+(Math.abs(m.saldo)/1000).toFixed(1)+'k':Math.round(m.saldo)}</div>
+    </div>`;
+  }).join('');
+
+  // Top categorie
+  const topCatHtml = snap.topCat.map(c => {
+    const pct = snap.months.at(-1)?.spese > 0 ? (c.totale/snap.months.at(-1).spese*100).toFixed(0) : 0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:10px;height:10px;border-radius:50%;background:${c.colore};flex-shrink:0"></div>
+      <div style="flex:1;font-size:13px">${c.nome}</div>
+      <div style="font-size:12px;color:var(--t3)">${pct}%</div>
+      <div style="font-size:13px;font-weight:700;color:var(--red)">€ ${eur(c.totale)}</div>
+    </div>`;
+  }).join('');
+
+  // Ultime transazioni
+  const recentHtml = snap.recent.slice(0,10).map(r => {
+    const sign  = r.tipo==='spesa' ? '-' : '+';
+    const color = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
+      <div style="width:10px;height:10px;border-radius:50%;background:${r.catColore};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.desc}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:1px">${r.catNome} · ${fmtDate(r.data)}</div>
+      </div>
+      <div style="font-size:14px;font-weight:700;color:${color};white-space:nowrap">${sign} € ${eur(r.importo)}</div>
+    </div>`;
+  }).join('');
+
+  const ytd = snap.ytd;
+  el.innerHTML = `
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:11px;color:var(--t3)">Aggiornato il</div>
+        <div style="font-size:13px;font-weight:600">${fmtExp}</div>
+      </div>
+      <button class="btn" style="padding:8px 14px;font-size:12px;background:var(--bg3);color:var(--accent);border:1px solid var(--accent);width:auto" onclick="document.getElementById('snapshot-input').click()">🔄 Aggiorna</button>
+    </div>
+    <input type="file" id="snapshot-input" accept=".json" style="display:none" onchange="loadSnapshot(event)">
+
+    <!-- YTD -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-label">Anno ${ytd.anno} — riepilogo</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--t3);margin-bottom:2px">Entrate</div>
+          <div style="font-size:15px;font-weight:800;color:var(--green)">€ ${ytd.entrate>=1000?(ytd.entrate/1000).toFixed(1)+'k':eur(ytd.entrate)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--t3);margin-bottom:2px">Uscite</div>
+          <div style="font-size:15px;font-weight:800;color:var(--red)">€ ${ytd.spese>=1000?(ytd.spese/1000).toFixed(1)+'k':eur(ytd.spese)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--t3);margin-bottom:2px">Saldo</div>
+          <div style="font-size:15px;font-weight:800;color:${ytd.saldo>=0?'var(--green)':'var(--red)'}">${ytd.saldo>=0?'+':'-'}€ ${Math.abs(ytd.saldo)>=1000?(Math.abs(ytd.saldo)/1000).toFixed(1)+'k':eur(Math.abs(ytd.saldo))}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grafico mesi -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-label" style="margin-bottom:12px">Ultimi 6 mesi</div>
+      <div style="display:flex;gap:4px;align-items:flex-end;justify-content:space-between">${monthBars}</div>
+      <div style="display:flex;gap:12px;margin-top:8px;justify-content:center">
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;border-radius:2px;background:var(--green)"></div>Entrate</div>
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;border-radius:2px;background:var(--red)"></div>Uscite</div>
+      </div>
+    </div>
+
+    <!-- Top categorie mese corrente -->
+    ${snap.topCat.length ? `<div class="card" style="margin-bottom:12px">
+      <div class="card-label" style="margin-bottom:8px">Top categorie — mese corrente</div>
+      ${topCatHtml}
+    </div>` : ''}
+
+    <!-- Ultime transazioni -->
+    <div class="section-hdr">Ultime transazioni (da Access)</div>
+    ${recentHtml}
+    <div style="text-align:center;font-size:11px;color:var(--t3);padding:8px 0 20px">Mostrate le ultime ${Math.min(10,snap.recent.length)} di ${snap.recent.length}</div>
+  `;
+}
+
+// ══════════════════════════════════════════
+//  EXPORT CSV
+// ══════════════════════════════════════════
+function renderExportStats() {
+  const records = getRecords();
+  const notExp  = records.filter(r=>!r.exported).length;
+  const el      = document.getElementById('export-stats');
+  el.innerHTML  = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="card-label">Record totali</div>
+        <div style="font-size:22px;font-weight:800">${records.length}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="card-label">Da esportare</div>
+        <div style="font-size:22px;font-weight:800;color:var(--amber)">${notExp}</div>
+      </div>
+    </div>`;
+}
+
+function exportCSV() {
+  const allRecords = getRecords();
+  const range      = document.getElementById('export-range').value;
+  const now        = new Date();
+  const nowYM      = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const cats       = getCats();
+
+  let records = allRecords;
+  if (range === 'month')    records = allRecords.filter(r => ym(r.data) === nowYM);
+  if (range === '3months') {
+    const d3 = new Date(now); d3.setMonth(d3.getMonth()-2);
+    const from = `${d3.getFullYear()}-${String(d3.getMonth()+1).padStart(2,'0')}`;
+    records = allRecords.filter(r => ym(r.data) >= from);
+  }
+  if (range === 'notexported') records = allRecords.filter(r=>!r.exported);
+
+  if (!records.length) { showToast('⚠ Nessun record da esportare'); return; }
+
+  // Header CSV compatibile con il tool principale
+  const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
+  const rows   = records.map(r => {
+    const arr  = r.tipo==='sp' ? cats.spese : cats.entrate;
+    const cat  = arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
+    const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
+    const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
+    const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
+    return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
+  });
+
+  // Aggiungi cancellazioni
+  const DKEY2 = 'budget_deleted_log';
+  const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]');
+  const delRows = delLog.map(d => {
+    const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
+    const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
+    return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
+  });
+
+  const csvFull = [header, ...rows, ...delRows].join('\n');
+  const blob = new Blob(['\uFEFF'+csvFull], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `budget-iphone-${now.toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  localStorage.removeItem(DKEY2);
+
+  // Marca come esportati
+  const updated = allRecords.map(r => {
+    if (records.find(x=>x.id===r.id)) return {...r, exported:true};
+    return r;
+  });
+  saveRecords(updated);
+  showToast(`✓ ${records.length} record esportati${delLog.length?' + '+delLog.length+' cancellaz.':''}`);
+  renderExportStats();
+}
+
+function clearExported() {
+  if (!confirm('Eliminare tutti i record già esportati?')) return;
+  const records = getRecords().filter(r=>!r.exported);
+  saveRecords(records);
+  showToast('✓ Record esportati eliminati');
+  renderExportStats();
+}
+
+// ══════════════════════════════════════════
+//  SINCRONIZZA CATEGORIE DA PC
+// ══════════════════════════════════════════
+function importCategorie() {
+  document.getElementById('cat-file-input').click();
+}
+
+function resetLocalRecords() {
+  if (!confirm('Cancellare tutti i record locali?\nLo snapshot e le categorie rimarranno intatti.')) return;
+  localStorage.removeItem('budget_mobile_records');
+  localStorage.removeItem('budget_deleted_log');
+  localStorage.removeItem('budget_hidden_snap');
+  showToast('✓ Record locali cancellati');
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+function resetAll() {
+  if (!confirm('Reset completo?\nVerranno cancellati: record locali, snapshot, categorie, log cancellazioni.\nLe spese rapide verranno conservate.')) return;
+  const quickBackup = localStorage.getItem('budget_quick_taps');
+  const keysToKeep = ['budget_quick_taps', 'budget_drive_token'];
+  const allKeys = Object.keys(localStorage);
+  allKeys.forEach(k => { if (!keysToKeep.includes(k)) localStorage.removeItem(k); });
+  if (quickBackup) localStorage.setItem('budget_quick_taps', quickBackup);
+  showToast('✓ Reset completato');
+  location.reload();
+}
+
+function exportQuickBackup() {
+  const list = getQuick();
+  if (!list.length) { showToast('⚠ Nessuna spesa rapida da salvare'); return; }
+  const blob = new Blob([JSON.stringify({type:'quick-backup',v:1,data:list}, null, 2)],
+                        {type:'application/json'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'budget-spese-rapide.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`✓ Backup ${list.length} spese rapide salvato`);
+}
+
+function importQuickBackup(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      const list   = parsed.type === 'quick-backup' ? parsed.data : parsed;
+      if (!Array.isArray(list)) { showToast('⚠ File non valido'); return; }
+      saveQuickList(list);
+      renderQuickGrid();
+      showToast(`✓ ${list.length} spese rapide ripristinate`);
+    } catch { showToast('⚠ Errore lettura file'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function loadCategorieFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.spese && data.entrate) {
+        localStorage.setItem(CAT_KEY, JSON.stringify(data));
+        renderCatGrid();
+        showToast('✓ Categorie aggiornate (' + data.spese.length + ' spese, ' + data.entrate.length + ' entrate)');
+      } else { showToast('⚠ File non valido'); }
+    } catch(err) { showToast('⚠ Errore lettura file'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ══════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════
+let toastTimer;
+function showToast(msg, type, duration) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  el.style.transform = 'translateX(-50%) translateY(0)';
+  el.style.background = type === 'error' ? '#c0392b' : type === 'success' ? '#1ecf96' : '#2a2a3e';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(20px)';
+  }, duration || 2200);
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+function _migrateQuickItems() {
+  // Se localStorage è vuoto, controlla se ci sono quick salvate nello snap
+  const existing = JSON.parse(localStorage.getItem(QUICK_KEY)||'[]');
+  if (existing.length > 0) return; // già presenti, niente da fare
+  // Prova a recuperarle dallo snapshot già caricato
+  const snap = getSnapshot();
+  if (snap && snap.quickItems && snap.quickItems.length > 0) {
+    localStorage.setItem(QUICK_KEY, JSON.stringify(snap.quickItems));
+  }
+}
+
+function init() {
+  _migrateQuickItems();
+  initMonth();
+  document.getElementById('reg-data').value = today();
+  renderDashboard();
+  renderCatGrid();
+  renderQuickGrid();
+  setType('sp');
+}
+
+init();
+</script>
+
+<!-- Google Identity Services + GAPI — caricati dopo init per non bloccare l'app -->
+<script>
+(function loadGoogleLibs() {
+  // 1. Google Identity Services (OAuth 2.0)
+  const gisScript = document.createElement('script');
+  gisScript.src   = 'https://accounts.google.com/gsi/client';
+  gisScript.async = true;
+  gisScript.defer = true;
+  gisScript.onload = () => {
+    window._gisLoaded = true;
+    _tryDriveInit();
+  };
+  gisScript.onerror = () => { window._gisLoaded = false; };
+  document.head.appendChild(gisScript);
+
+  // 2. GAPI (per Google Picker)
+  const gapiScript = document.createElement('script');
+  gapiScript.src   = 'https://apis.google.com/js/api.js';
+  gapiScript.async = true;
+  gapiScript.defer = true;
+  gapiScript.onload = () => {
+    window._gapiLoaded = true;
+    _tryDriveInit();
+  };
+  gapiScript.onerror = () => { window._gapiLoaded = false; };
+  document.head.appendChild(gapiScript);
+})();
+
+function _tryDriveInit() {
+  if (window._gapiLoaded) {
+    try { gapi.load('picker', () => { window._driveReady = true; }); } catch(e) {}
+  }
+  // Ripristina token salvato se GIS è pronto
+  if (window._gisLoaded) _driveRestoreToken();
+}
+</script>
