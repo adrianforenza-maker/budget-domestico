@@ -1609,10 +1609,12 @@ function renderStorico() {
   }).join('');
 
   // Cancellazioni pendenti con badge 🗑 e pulsante ↩ Annulla
-  const pendingHtml = pendingDel.length ? `
+  // Solo record snapshot (non locali) nel pending sync
+  const pendingSync = pendingDel.filter(d => !d.isLocal);
+  const pendingHtml = pendingSync.length ? `
     <div style="margin-top:12px;padding:8px 12px;background:rgba(240,86,106,.06);border-radius:10px;border:1px solid rgba(240,86,106,.2)">
-      <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px;letter-spacing:.5px">🗑 IN ATTESA DI SYNC (${pendingDel.length})</div>
-      ${pendingDel.map((d, idx) => {
+      <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px;letter-spacing:.5px">🗑 IN ATTESA DI SYNC (${pendingSync.length})</div>
+      ${pendingSync.map((d, idx) => {
         const isEn = d.tipo === 'en';
         const col  = isEn ? 'var(--green)' : 'var(--red)';
         const sign = isEn ? '+' : '-';
@@ -1622,7 +1624,7 @@ function renderStorico() {
             <div style="font-size:13px;font-weight:600;color:var(--t2);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.desc||'—'}</div>
             <div style="font-size:11px;color:${col}">${fmtDate(d.data)} · ${sign} € ${eur(d.importo||0)}</div>
           </div>
-          ${d.isLocal ? '' : `<button onclick="revertDeletion(${idx})" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>`}
+          <button onclick="revertDeletion(${idx})" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>
         </div>`;
       }).join('')}
     </div>` : '';
