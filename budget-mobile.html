@@ -470,6 +470,17 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   <button class="btn btn-ghost" onclick="exportQuickBackup()" style="margin-bottom:8px">💾 Salva backup spese rapide</button>
   <button class="btn btn-ghost" onclick="document.getElementById('quick-backup-input').click()" style="margin-bottom:20px">📂 Ripristina spese rapide</button>
   <input type="file" id="quick-backup-input" accept=".json" style="display:none" onchange="importQuickBackup(event)">
+
+  <!-- RESET -->
+  <div style="margin-top:24px;padding:16px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:12px">⚠️ Reset Dati</div>
+    <button class="btn" onclick="resetLocalRecords()" style="width:100%;background:rgba(240,86,106,.15);border:1px solid rgba(240,86,106,.4);color:var(--red);margin-bottom:8px">
+      🗑 Cancella tutti i record locali
+    </button>
+    <button class="btn" onclick="resetAll()" style="width:100%;background:rgba(240,86,106,.25);border:1px solid rgba(240,86,106,.6);color:var(--red)">
+      💣 Reset completo (tutto tranne spese rapide)
+    </button>
+  </div>
 </div>
 
 <!-- BOTTOM NAV -->
@@ -2118,6 +2129,26 @@ function clearExported() {
 // ══════════════════════════════════════════
 function importCategorie() {
   document.getElementById('cat-file-input').click();
+}
+
+function resetLocalRecords() {
+  if (!confirm('Cancellare tutti i record locali?\nLo snapshot e le categorie rimarranno intatti.')) return;
+  localStorage.removeItem('budget_mobile_records');
+  localStorage.removeItem('budget_deleted_log');
+  localStorage.removeItem('budget_hidden_snap');
+  showToast('✓ Record locali cancellati');
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+function resetAll() {
+  if (!confirm('Reset completo?\nVerranno cancellati: record locali, snapshot, categorie, log cancellazioni.\nLe spese rapide verranno conservate.')) return;
+  const quickBackup = localStorage.getItem('budget_quick_taps');
+  const keysToKeep = ['budget_quick_taps', 'budget_drive_token'];
+  const allKeys = Object.keys(localStorage);
+  allKeys.forEach(k => { if (!keysToKeep.includes(k)) localStorage.removeItem(k); });
+  if (quickBackup) localStorage.setItem('budget_quick_taps', quickBackup);
+  showToast('✓ Reset completato');
+  location.reload();
 }
 
 function exportQuickBackup() {
