@@ -1547,13 +1547,6 @@ function deleteRecord(e, localId, snapKey) {
   e.stopPropagation();
   const DKEY = 'budget_deleted_log';
   if (localId) {
-    const rec = getRecords().find(r => r.id === localId);
-    if (rec) {
-      const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
-      log.push({ tipo:rec.tipo, data:rec.data, desc:rec.desc||'', importo:rec.importo,
-                 idCat:rec.idCat, note:rec.note||'', deletedAt:new Date().toISOString() });
-      localStorage.setItem(DKEY, JSON.stringify(log));
-    }
     saveRecords(getRecords().filter(r => r.id !== localId));
     showToast('✓ Record eliminato');
     _refreshCurrentPage();
@@ -1613,14 +1606,19 @@ function renderStorico() {
   const pendingHtml = pendingDel.length ? `
     <div style="margin-top:12px;padding:8px 12px;background:rgba(240,86,106,.06);border-radius:10px;border:1px solid rgba(240,86,106,.2)">
       <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px;letter-spacing:.5px">🗑 IN ATTESA DI SYNC (${pendingDel.length})</div>
-      ${pendingDel.map((d, idx) => `
+      ${pendingDel.map((d, idx) => {
+        const isEn = d.tipo === 'en';
+        const col  = isEn ? 'var(--green)' : 'var(--red)';
+        const sign = isEn ? '+' : '-';
+        return `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(240,86,106,.1)">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--t2);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.desc||'—'}</div>
-            <div style="font-size:11px;color:var(--t3)">${fmtDate(d.data)} · - € ${eur(d.importo||0)}</div>
+            <div style="font-size:11px;color:${col}">${fmtDate(d.data)} · ${sign} € ${eur(d.importo||0)}</div>
           </div>
           <button onclick="revertDeletion(${idx})" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     </div>` : '';
 
   el.innerHTML = recordsHtml + pendingHtml;
