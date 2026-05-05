@@ -1413,9 +1413,9 @@ function renderDashboard() {
   if (snap) {
     snapTx = (snap.recent||[])
       .filter(r => r.data && r.data.startsWith(currentMonth))
-      .filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+r.importo));
+      .filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)));
     if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
-      snapTx = (snap.recent||[]).filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+r.importo));
+      snapTx = (snap.recent||[]).filter(r => !hiddenSnapDash.includes(r.data+'|'+r.desc+'|'+parseFloat(r.importo||0).toFixed(2)));
   }
 
   // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
@@ -1489,6 +1489,10 @@ function deleteSnapRecord(e, snapIdx) {
     hidden.push(key);
     localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
   }
+  // DEBUG TEMPORANEO — mostra chiave salvata e chiavi snap per confronto
+  const snapKeys = (window._snapTxCache||[]).map(s => s.data+'|'+s.desc+'|'+parseFloat(s.importo||0).toFixed(2));
+  const match = snapKeys.includes(key);
+  showToast('🔑 KEY: ' + key + ' | MATCH: ' + match, match ? 'success' : 'error', 8000);
   const DKEY = 'budget_deleted_log';
   const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
   log.push({ tipo: r.tipo==='spesa'?'sp':'en', data:r.data, desc:r.desc||'',
@@ -2174,16 +2178,17 @@ function loadCategorieFile(e) {
 //  TOAST
 // ══════════════════════════════════════════
 let toastTimer;
-function showToast(msg) {
+function showToast(msg, type, duration) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.style.opacity = '1';
   el.style.transform = 'translateX(-50%) translateY(0)';
+  el.style.background = type === 'error' ? '#c0392b' : type === 'success' ? '#1ecf96' : '#2a2a3e';
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     el.style.opacity = '0';
     el.style.transform = 'translateX(-50%) translateY(20px)';
-  }, 2200);
+  }, duration || 2200);
 }
 
 // ══════════════════════════════════════════
