@@ -837,13 +837,16 @@ async function driveLoadSnapshot() {
   const btn = document.getElementById('drive-load-snap-btn');
   if (btn) btn.textContent = '⏳ Caricamento...';
   try {
+    // Se non connesso, avvia login PKCE
+    const saved = localStorage.getItem('budget_drive_token');
+    if (!saved && !_driveToken) { driveConnect(); return; }
     // Auto-refresh token silenzioso (PKCE)
     await _driveEnsureToken().catch(async (err) => {
-      // Se non connesso o refresh fallito — chiedi login
+      // Se refresh fallito — chiedi login
       _driveToken = null;
       _driveUpdateUI(false);
-      showToast('🔑 Sessione Drive scaduta — riconnetti', 'error');
-      throw err; // blocca il resto del flusso
+      driveConnect();
+      throw err;
     });
     // Cerca snapshot.json OVUNQUE su Drive, prende il più recente
     const q = encodeURIComponent(`name='snapshot.json' and trashed=false`);
