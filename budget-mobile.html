@@ -1890,7 +1890,7 @@ function salvaRecord() {
 // ══════════════════════════════════════════
 
 function getSnapshot() {
-  try { return getSnapshot(); } catch(e) { return null; }
+  try { return JSON.parse(localStorage.getItem(SNAP_KEY)||'null'); } catch(e) { return null; }
 }
 
 // ── Merge intelligente: rimuove dal localStorage i record già assorbiti dallo snapshot ──
