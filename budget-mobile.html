@@ -988,6 +988,8 @@ async function driveUploadCSV() {
     renderExportStats();
     const nDel = delLogD.length;
     showToast(`✓ ${records.length} record + ${nDel} cancellaz. inviati su Drive`, 'success');
+    // Aggiorna Storico — le cancellazioni pendenti spariscono dopo l'invio
+    if (currentPage === 'storico') renderStorico();
   } catch(e) {
     showToast('❌ Errore upload Drive: ' + e.message, 'error');
   } finally {
@@ -1545,12 +1547,19 @@ function renderStorico() {
   const records = getRecords().filter(r => ym(r.data) === currentMonthSt);
   const cats = getCats();
   const el = document.getElementById('storico-list');
-  if (!records.length) {
+
+  // Cancellazioni pendenti (non ancora inviate su Drive) del mese corrente
+  const deletedLog = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  const pendingDel = deletedLog.filter(d => d.data && ym(d.data) === currentMonthSt);
+
+  if (!records.length && !pendingDel.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione</div></div>';
     return;
   }
+
   const sorted = [...records].sort((a,b) => b.data.localeCompare(a.data));
-  el.innerHTML = sorted.map(r => {
+
+  const recordsHtml = sorted.map(r => {
     const arr = r.tipo==='sp' ? cats.spese : cats.entrate;
     const cat = arr.find(c=>c.ID===r.idCat) || {Nome:'—',Colore:'#9aa3c2'};
     const sign = r.tipo==='sp' ? '-' : '+';
@@ -1567,6 +1576,51 @@ function renderStorico() {
       </div>
     </div>`;
   }).join('');
+
+  // Cancellazioni pendenti con badge 🗑 e pulsante ↩ Annulla
+  const pendingHtml = pendingDel.length ? `
+    <div style="margin-top:12px;padding:8px 12px;background:rgba(240,86,106,.06);border-radius:10px;border:1px solid rgba(240,86,106,.2)">
+      <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px;letter-spacing:.5px">🗑 IN ATTESA DI SYNC (${pendingDel.length})</div>
+      ${pendingDel.map((d, idx) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(240,86,106,.1)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--t2);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.desc||'—'}</div>
+            <div style="font-size:11px;color:var(--t3)">${fmtDate(d.data)} · - € ${eur(d.importo||0)}</div>
+          </div>
+          <button onclick="revertDeletion(${idx})" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>
+        </div>`).join('')}
+    </div>` : '';
+
+  el.innerHTML = recordsHtml + pendingHtml;
+}
+
+// Annulla una cancellazione pendente (prima che venga inviata su Drive)
+function revertDeletion(idx) {
+  const log = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  const pendingDel = log.filter(d => d.data && ym(d.data) === currentMonthSt);
+  const entry = pendingDel[idx];
+  if (!entry) return;
+
+  // Rimuovi dal log globale
+  const entryIdx = log.findIndex(d =>
+    d.data === entry.data && d.desc === entry.desc &&
+    Math.abs((d.importo||0) - (entry.importo||0)) < 0.01 &&
+    d.deletedAt === entry.deletedAt
+  );
+  if (entryIdx >= 0) log.splice(entryIdx, 1);
+  localStorage.setItem('budget_deleted_log', JSON.stringify(log));
+
+  // Rimuovi anche da hidden_snap se era un record snapshot
+  const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
+  const snapKey = entry.data + '|' + (entry.desc||'') + '|' + parseFloat(entry.importo||0).toFixed(2);
+  const hidIdx = hiddenSnap.indexOf(snapKey);
+  if (hidIdx >= 0) hiddenSnap.splice(hidIdx, 1);
+  localStorage.setItem('budget_hidden_snap', JSON.stringify(hiddenSnap));
+
+  showToast('↩ Cancellazione annullata');
+  renderStorico();
+  if (currentPage === 'dashboard') renderDashboard();
+  if (typeof renderBilancio === 'function') renderBilancio();
 }
 
 // ══════════════════════════════════════════
