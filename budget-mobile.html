@@ -1837,10 +1837,11 @@ function _cleanLocalAfterSnapshot(snap) {
     const key = `${r.data}|${(r.desc||'').trim().toLowerCase()}|${parseFloat(r.importo||0).toFixed(2)}`;
     if (snapKeySet.has(key)) return false; // già nello snapshot → rimuovi
 
-    // Fallback: record esportato con data <= snapDate → già processato dal desktop
-    if (r.exported && r.data <= snapDate) return false;
+    // Se il record è stato esportato (exported:true), il desktop lo ha già processato
+    // → rimuovilo sempre, indipendentemente dalla data (copre anche i post-datati)
+    if (r.exported) return false;
 
-    // Record genuinamente nuovo (non ancora nello snapshot) → tienilo
+    // Record genuinamente nuovo (non ancora esportato) → tienilo
     return true;
   });
 
