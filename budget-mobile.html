@@ -471,8 +471,11 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   <button class="btn btn-ghost" onclick="document.getElementById('quick-backup-input').click()" style="margin-bottom:20px">📂 Ripristina spese rapide</button>
   <input type="file" id="quick-backup-input" accept=".json" style="display:none" onchange="importQuickBackup(event)">
 
-  <!-- RESET -->
-  <div style="margin-top:24px;padding:16px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
+</div>
+
+<!-- RESET DATI — fuori da snapshot-content per non essere sovrascritto da renderSnapshot() -->
+<div style="padding:0 16px 20px">
+  <div style="margin-top:8px;padding:16px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
     <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:12px">⚠️ Reset Dati</div>
     <button class="btn" onclick="resetDeletedLog()" style="width:100%;background:rgba(245,161,36,.12);border:1px solid rgba(245,161,36,.4);color:var(--amber);margin-bottom:8px">
       🧹 Pulisci log cancellazioni pendenti
