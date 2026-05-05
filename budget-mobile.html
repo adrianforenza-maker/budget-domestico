@@ -1145,7 +1145,7 @@ function renderBilancio() {
       if (m) {
         m.entrate = Math.max(0, (m.entrate||0) - imp);
         m.saldo   = m.entrate - (m.spese||0);
-        if (m.saldoBil != null) m.saldoBil = m.entrate - (m.spese||0);
+        if (m.saldoBil != null) m.saldoBil = (m.entratePrec ?? m.entrate) - (m.spese||0);
       }
       // Sottrai da entratePrec del mese successivo (modalità "Mese Prec.")
       const [y, mo] = recYm.split('-').map(Number);
@@ -1650,8 +1650,8 @@ function revertDeletion(idx) {
   localStorage.setItem('budget_hidden_snap', JSON.stringify(hiddenSnap));
 
   showToast('↩ Cancellazione annullata');
+  renderDashboard();
   renderStorico();
-  if (currentPage === 'dashboard') renderDashboard();
   if (typeof renderBilancio === 'function') renderBilancio();
 }
 
