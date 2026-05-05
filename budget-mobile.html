@@ -411,6 +411,15 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
       <span style="color:var(--t3);font-size:11px">In alternativa usa "Da file locale" per caricamento manuale</span>
     </div>
   </div>
+  <!-- RESET DATI — dentro page-snapshot ma fuori da snapshot-content -->
+  <div style="margin-top:12px;padding:12px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px">⚠️ Reset Dati</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button onclick="resetDeletedLog()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(245,161,36,.4);background:rgba(245,161,36,.1);color:var(--amber);font-size:13px;font-weight:600;cursor:pointer;text-align:left">🧹 Pulisci log cancellazioni pendenti</button>
+      <button onclick="resetLocalRecords()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(240,86,106,.4);background:rgba(240,86,106,.1);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;text-align:left">🗑 Cancella tutti i record locali</button>
+      <button onclick="resetAll()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(240,86,106,.6);background:rgba(240,86,106,.2);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;text-align:left">💣 Reset completo (tutto tranne spese rapide)</button>
+    </div>
+  </div>
 </div>
 
 <!-- EXPORT -->
@@ -471,22 +480,6 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   <button class="btn btn-ghost" onclick="document.getElementById('quick-backup-input').click()" style="margin-bottom:20px">📂 Ripristina spese rapide</button>
   <input type="file" id="quick-backup-input" accept=".json" style="display:none" onchange="importQuickBackup(event)">
 
-</div>
-
-<!-- RESET DATI — fuori da snapshot-content per non essere sovrascritto da renderSnapshot() -->
-<div style="padding:0 16px 20px" id="reset-dati-section">
-  <div style="margin-top:8px;padding:16px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
-    <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:12px">⚠️ Reset Dati</div>
-    <button class="btn" onclick="resetDeletedLog()" style="width:100%;background:rgba(245,161,36,.12);border:1px solid rgba(245,161,36,.4);color:var(--amber);margin-bottom:8px">
-      🧹 Pulisci log cancellazioni pendenti
-    </button>
-    <button class="btn" onclick="resetLocalRecords()" style="width:100%;background:rgba(240,86,106,.15);border:1px solid rgba(240,86,106,.4);color:var(--red);margin-bottom:8px">
-      🗑 Cancella tutti i record locali
-    </button>
-    <button class="btn" onclick="resetAll()" style="width:100%;background:rgba(240,86,106,.25);border:1px solid rgba(240,86,106,.6);color:var(--red)">
-      💣 Reset completo (tutto tranne spese rapide)
-    </button>
-  </div>
 </div>
 
 <!-- BOTTOM NAV -->
