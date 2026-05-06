@@ -2440,6 +2440,8 @@ async function _handleOAuthRedirectReturn() {
   const verifier    = localStorage.getItem('pkce_verifier');
   const savedState  = localStorage.getItem('pkce_state');
   const redirectUri = localStorage.getItem('pkce_redirect_uri');
+  // DEBUG — rimuovere dopo il test
+  alert('DEBUG\ncode: ' + (code ? code.slice(0,20)+'...' : 'NULL') + '\nverifier: ' + (verifier ? verifier.slice(0,20)+'...' : 'NULL') + '\nstate match: ' + (state === savedState) + '\nredirectUri: ' + redirectUri);
   localStorage.removeItem('pkce_verifier');
   localStorage.removeItem('pkce_state');
   localStorage.removeItem('pkce_redirect_uri');
