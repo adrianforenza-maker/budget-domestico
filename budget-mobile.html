@@ -687,8 +687,8 @@ async function driveConnect() {
     : (window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'oauth-callback.html');
 
   // Salva verifier per il callback
-  sessionStorage.setItem('pkce_verifier', verifier);
-  sessionStorage.setItem('pkce_state',    state);
+  localStorage.setItem('pkce_verifier', verifier);
+  localStorage.setItem('pkce_state',    state);
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authUrl.searchParams.set('client_id',             DRIVE_CLIENT_ID);
@@ -703,7 +703,7 @@ async function driveConnect() {
 
   // iOS: redirect flow (niente popup, iOS li blocca)
   if (isIOS) {
-    sessionStorage.setItem('pkce_redirect_uri', redirectUri);
+    localStorage.setItem('pkce_redirect_uri', redirectUri);
     window.location.href = authUrl.toString();
     return;
   }
@@ -2416,12 +2416,12 @@ async function _handleOAuthRedirectReturn() {
   const state = params.get('state');
   if (!code) return;
   window.history.replaceState({}, document.title, window.location.pathname);
-  const verifier    = sessionStorage.getItem('pkce_verifier');
-  const savedState  = sessionStorage.getItem('pkce_state');
-  const redirectUri = sessionStorage.getItem('pkce_redirect_uri');
-  sessionStorage.removeItem('pkce_verifier');
-  sessionStorage.removeItem('pkce_state');
-  sessionStorage.removeItem('pkce_redirect_uri');
+  const verifier    = localStorage.getItem('pkce_verifier');
+  const savedState  = localStorage.getItem('pkce_state');
+  const redirectUri = localStorage.getItem('pkce_redirect_uri');
+  localStorage.removeItem('pkce_verifier');
+  localStorage.removeItem('pkce_state');
+  localStorage.removeItem('pkce_redirect_uri');
   if (!verifier || state !== savedState) {
     showToast('❌ Errore autenticazione — riprova', 'error'); return;
   }
