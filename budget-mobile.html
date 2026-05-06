@@ -61,6 +61,9 @@ body {
   border-top: 1px solid var(--border);
   display: flex;
   padding-bottom: var(--safe-bot);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  isolation: isolate;
 }
 .nav-item {
   flex: 1; display: flex; flex-direction: column; align-items: center;
@@ -639,12 +642,36 @@ async function driveConnect() {
     try {
       const { token, exp, refreshToken } = JSON.parse(saved);
       if (Date.now() < exp) {
+        // Token ancora valido — chiedi se disconnettersi
         if (confirm('Disconnettersi da Google Drive?')) {
           localStorage.removeItem('budget_drive_token');
           _driveToken = null;
           _driveUpdateUI(false);
         }
         return;
+      }
+      // Token scaduto — prova refresh silenzioso prima del popup
+      if (refreshToken) {
+        showToast('🔄 Rinnovo sessione Drive...', '', 3000);
+        try {
+          const resp = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              refresh_token: refreshToken,
+              client_id: DRIVE_CLIENT_ID,
+              grant_type: 'refresh_token'
+            }).toString()
+          });
+          const tokens = await resp.json();
+          if (tokens.access_token) {
+            _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+            _driveUpdateUI(true);
+            showToast('✓ Sessione Drive rinnovata!', 'success');
+            return;
+          }
+        } catch(e) {}
+        // Refresh fallito — continua con login completo
       }
     } catch(e) {}
   }
