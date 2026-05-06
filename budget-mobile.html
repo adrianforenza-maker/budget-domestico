@@ -1216,7 +1216,7 @@ function renderBilancio() {
   const last6        = months.slice(-6);
   const annoCorrente = new Date().getFullYear().toString();
   const mesiAnno     = months.filter(m => m.ym.startsWith(annoCorrente));
-  const ytdEntrate   = mesiAnno.reduce((s,m) => s + m.entrate, 0);
+  const ytdEntrate   = mesiAnno.reduce((s,m) => s + (modo === 'prec' ? (m.entratePrec ?? m.entrate) : m.entrate), 0);
   const ytdSpese     = mesiAnno.reduce((s,m) => s + m.spese,   0);
   const ytdSaldoCorr = mesiAnno.reduce((s,m) => s + m.saldo,   0);
   const ytdSaldoBil  = mesiAnno.reduce((s,m) => s + (m.saldoBil ?? m.saldo), 0);
