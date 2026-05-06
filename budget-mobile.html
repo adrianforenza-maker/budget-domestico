@@ -419,6 +419,7 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
     <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px">⚠️ Reset Dati</div>
     <div style="display:flex;flex-direction:column;gap:6px">
       <button onclick="resetDeletedLog()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(245,161,36,.4);background:rgba(245,161,36,.1);color:var(--amber);font-size:13px;font-weight:600;cursor:pointer;text-align:left">🧹 Pulisci log cancellazioni pendenti</button>
+      <button onclick="simulateTokenExpiry()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(79,142,247,.4);background:rgba(79,142,247,.1);color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;text-align:left">🔓 Simula token scaduto (test)</button>
       <button onclick="resetLocalRecords()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(240,86,106,.4);background:rgba(240,86,106,.1);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;text-align:left">🗑 Cancella tutti i record locali</button>
       <button onclick="resetAll()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(240,86,106,.6);background:rgba(240,86,106,.2);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;text-align:left">💣 Reset completo (tutto tranne spese rapide)</button>
     </div>
@@ -783,9 +784,17 @@ async function _driveWithToken(fn) {
     return await fn();
   } catch(e) {
     if (['not_connected','no_refresh_token','refresh_failed'].some(s => e.message?.startsWith(s))) {
-      showToast('🔑 Sessione Drive scaduta — riconnetti', 'error');
-      _driveUpdateUI(false);
-      driveConnect();
+      const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS) {
+        // Su iOS non fare redirect automatico — mostra messaggio e basta
+        showToast('🔑 Sessione scaduta — premi Connetti Drive', 'error', 5000);
+        _driveUpdateUI(false);
+      } else {
+        showToast('🔑 Sessione Drive scaduta — riconnetti', 'error');
+        _driveUpdateUI(false);
+        driveConnect();
+      }
       return;
     }
     throw e;
@@ -2317,6 +2326,18 @@ function resetLocalRecords() {
   localStorage.removeItem('budget_hidden_snap');
   showToast('✓ Record locali cancellati');
   if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+function simulateTokenExpiry() {
+  const saved = localStorage.getItem('budget_drive_token');
+  if (!saved) { showToast('Nessun token salvato — connettiti prima', 'error'); return; }
+  try {
+    const obj = JSON.parse(saved);
+    obj.exp = Date.now() - 1000; // scaduto 1 secondo fa
+    localStorage.setItem('budget_drive_token', JSON.stringify(obj));
+    _driveToken = null;
+    showToast('✓ Token simulato come scaduto — premi ☁ Drive', 'success');
+  } catch(e) { showToast('Errore: ' + e.message, 'error'); }
 }
 
 function resetAll() {
