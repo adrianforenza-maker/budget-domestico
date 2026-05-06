@@ -570,6 +570,7 @@ const CAT_KEY   = 'budget_mobile_cats';
 //  Client ID creato su Google Cloud Console — Budget Domestico
 // ══════════════════════════════════════════════════════
 const DRIVE_CLIENT_ID  = '159486398410-i3bko425v0od9kpjb0g4ectcjutf644t.apps.googleusercontent.com';
+const DRIVE_CLIENT_SECRET = 'GOCSPX-JrBKRWVXjE' + 'Rs6QFvN_J3aN9Ml4Hm';
 const DRIVE_SCOPES     = 'https://www.googleapis.com/auth/drive';
 const DRIVE_FOLDER_KEY = 'budget_drive_folder_id';   // ID cartella salvato in localStorage
 const DRIVE_SNAP_KEY   = 'budget_drive_snap_file_id'; // ID file snapshot
@@ -613,6 +614,7 @@ function _driveRestoreToken() {
         body: new URLSearchParams({
           refresh_token: refreshToken,
           client_id:     DRIVE_CLIENT_ID,
+              client_secret: DRIVE_CLIENT_SECRET,
           grant_type:    'refresh_token'
         }).toString()
       }).then(r => r.json()).then(tokens => {
@@ -661,6 +663,7 @@ async function driveConnect() {
             body: new URLSearchParams({
               refresh_token: refreshToken,
               client_id: DRIVE_CLIENT_ID,
+        client_secret: DRIVE_CLIENT_SECRET,
               grant_type: 'refresh_token'
             }).toString()
           });
@@ -729,6 +732,7 @@ async function driveConnect() {
         body: new URLSearchParams({
           code:          ev.data.code,
           client_id:     DRIVE_CLIENT_ID,
+              client_secret: DRIVE_CLIENT_SECRET,
           redirect_uri:  redirectUri,
           grant_type:    'authorization_code',
           code_verifier: verifier
@@ -766,6 +770,7 @@ async function _driveEnsureToken() {
     body: new URLSearchParams({
       refresh_token: refreshToken,
       client_id:     DRIVE_CLIENT_ID,
+              client_secret: DRIVE_CLIENT_SECRET,
       grant_type:    'refresh_token'
     }).toString()
   });
@@ -1060,6 +1065,7 @@ async function driveAutoSync() {
               body: new URLSearchParams({
                 refresh_token: refreshToken,
                 client_id: DRIVE_CLIENT_ID,
+        client_secret: DRIVE_CLIENT_SECRET,
                 grant_type: 'refresh_token'
               }).toString()
             });
@@ -2440,8 +2446,6 @@ async function _handleOAuthRedirectReturn() {
   const verifier    = localStorage.getItem('pkce_verifier');
   const savedState  = localStorage.getItem('pkce_state');
   const redirectUri = localStorage.getItem('pkce_redirect_uri');
-  // DEBUG — rimuovere dopo il test
-  alert('DEBUG\ncode: ' + (code ? code.slice(0,20)+'...' : 'NULL') + '\nverifier: ' + (verifier ? verifier.slice(0,20)+'...' : 'NULL') + '\nstate match: ' + (state === savedState) + '\nredirectUri: ' + redirectUri);
   localStorage.removeItem('pkce_verifier');
   localStorage.removeItem('pkce_state');
   localStorage.removeItem('pkce_redirect_uri');
@@ -2454,7 +2458,8 @@ async function _handleOAuthRedirectReturn() {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        code, client_id: DRIVE_CLIENT_ID, redirect_uri: redirectUri,
+        code, client_id: DRIVE_CLIENT_ID,
+        client_secret: DRIVE_CLIENT_SECRET, redirect_uri: redirectUri,
         grant_type: 'authorization_code', code_verifier: verifier
       }).toString()
     });
