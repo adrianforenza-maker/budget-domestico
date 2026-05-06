@@ -1025,8 +1025,45 @@ async function driveUploadCSV() {
 
 // ── Auto Sync: scarica snapshot + eventualmente upload CSV ─────
 async function driveAutoSync() {
-  if (!_driveToken) { driveConnect(); return; }
   const btn = document.getElementById('drive-sync-btn');
+  // Se non c'è token, prova refresh silenzioso prima di aprire il login
+  if (!_driveToken) {
+    const saved = localStorage.getItem('budget_drive_token');
+    if (saved) {
+      try {
+        const { refreshToken } = JSON.parse(saved);
+        if (refreshToken) {
+          if (btn) { btn.textContent = '🔄'; btn.disabled = true; }
+          try {
+            const resp = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                refresh_token: refreshToken,
+                client_id: DRIVE_CLIENT_ID,
+                grant_type: 'refresh_token'
+              }).toString()
+            });
+            const tokens = await resp.json();
+            if (tokens.access_token) {
+              _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+              _driveUpdateUI(true);
+            } else {
+              if (btn) { btn.textContent = '☁ Drive'; btn.disabled = false; }
+              driveConnect(); return;
+            }
+          } catch(e) {
+            if (btn) { btn.textContent = '☁ Drive'; btn.disabled = false; }
+            driveConnect(); return;
+          }
+        } else {
+          driveConnect(); return;
+        }
+      } catch(e) { driveConnect(); return; }
+    } else {
+      driveConnect(); return;
+    }
+  }
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   try {
     // 1. Carica snapshot aggiornato dal Drive
