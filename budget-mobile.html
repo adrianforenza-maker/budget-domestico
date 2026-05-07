@@ -987,7 +987,7 @@ async function driveUploadCSV() {
       const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
       return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
     });
-    const delRowsD = delLogD.map(d => {
+    const delRowsD = delLogD.filter(d => !d.isLocal).map(d => {
       const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
       const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
       return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
@@ -1096,7 +1096,7 @@ async function driveAutoSync() {
     // 2. Controlla record non esportati E cancellazioni pendenti
     const allRecords = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
     const toExport   = allRecords.filter(r => !r.exported);
-    const delLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+    const delLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]').filter(d => !d.isLocal);
     const hasData    = toExport.length > 0 || delLog.length > 0;
     if (hasData) {
       let msg = '✓ Snapshot aggiornato!\n\n';
@@ -2272,7 +2272,7 @@ function exportCSV() {
   // Aggiungi cancellazioni
   const DKEY2 = 'budget_deleted_log';
   const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]');
-  const delRows = delLog.map(d => {
+  const delRows = delLog.filter(d => !d.isLocal).map(d => {
     const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
     const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
     return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
