@@ -619,7 +619,7 @@ function _driveRestoreToken() {
         }).toString()
       }).then(r => r.json()).then(tokens => {
         if (tokens.access_token) {
-          _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+          _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token || refreshToken);
           _driveUpdateUI(true);
         } else {
           // Refresh fallito — richiedi login
@@ -669,7 +669,7 @@ async function driveConnect() {
           });
           const tokens = await resp.json();
           if (tokens.access_token) {
-            _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+            _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token || refreshToken);
             _driveUpdateUI(true);
             showToast('✓ Sessione Drive rinnovata!', 'success');
             return;
@@ -776,7 +776,7 @@ async function _driveEnsureToken() {
   });
   const tokens = await resp.json();
   if (tokens.access_token) {
-    _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+    _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token || refreshToken);
     return tokens.access_token;
   }
   throw new Error('refresh_failed: ' + (tokens.error||'unknown'));
@@ -1071,7 +1071,7 @@ async function driveAutoSync() {
             });
             const tokens = await resp.json();
             if (tokens.access_token) {
-              _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
+              _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token || refreshToken);
               _driveUpdateUI(true);
             } else {
               if (btn) { btn.textContent = '☁ Drive'; btn.disabled = false; }
