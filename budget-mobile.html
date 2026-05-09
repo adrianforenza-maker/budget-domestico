@@ -1541,6 +1541,9 @@ function renderDashboard() {
       const impStr  = parseFloat(r.importo||0).toFixed(2);
       const baseEnc = r.data+'|'+encodeURIComponent(r.desc||'')+'|'+impStr+'|'+(r.tipo||'spesa');
       const withId  = baseEnc+'|'+(r.id!=null?r.id:i);
+      // Se il record ha un ID Access, usa solo la chiave precisa con ID — no fallback greedy
+      if (r.id != null) return hiddenSnapDash.some(k => k === withId);
+      // Retrocompatibilità per record senza ID (snapshot vecchi)
       const baseRaw = r.data+'|'+r.desc+'|'+impStr;
       return hiddenSnapDash.some(k => k === withId || k === baseEnc || k.startsWith(baseRaw+'|') || k === baseRaw);
     };
