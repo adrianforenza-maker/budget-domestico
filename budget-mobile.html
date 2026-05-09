@@ -974,7 +974,7 @@ async function driveUploadCSV() {
     const fileName = `budget-mobile-${dateStr}-${timeStr}.csv`;
 
     // Header identico a exportCSV — compatibile con desktop processIphoneCSV
-    const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
+    const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note,IDMobile';
     const _catsD = getCats();
     // Aggiungi anche righe CANCELLATO dal log
     const DKEY3 = 'budget_deleted_log';
@@ -985,7 +985,7 @@ async function driveUploadCSV() {
       const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
       const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
       const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
-      return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
+      return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}",${r.id||''}`;
     });
     const delRowsD = delLogD.filter(d => !d.isLocal).map(d => {
       const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
@@ -2259,14 +2259,14 @@ function exportCSV() {
   if (!records.length) { showToast('⚠ Nessun record da esportare'); return; }
 
   // Header CSV compatibile con il tool principale
-  const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
+  const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note,IDMobile';
   const rows   = records.map(r => {
     const arr  = r.tipo==='sp' ? cats.spese : cats.entrate;
     const cat  = arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
     const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
     const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
     const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
-    return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
+    return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}",${r.id||''}`;
   });
 
   // Aggiungi cancellazioni
