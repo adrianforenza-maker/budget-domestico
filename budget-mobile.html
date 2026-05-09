@@ -1537,17 +1537,18 @@ function renderDashboard() {
   const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
   let snapTx = [];
   if (snap) {
-    const _isHiddenSnap = r => {
-      const impStr = parseFloat(r.importo||0).toFixed(2);
-      const prefix = r.data+'|'+r.desc+'|'+impStr+'|';
-      const exact  = r.data+'|'+r.desc+'|'+impStr;
-      return hiddenSnapDash.some(k => k.startsWith(prefix) || k === exact);
+    const _isHiddenSnap = (r, i) => {
+      const impStr  = parseFloat(r.importo||0).toFixed(2);
+      const baseEnc = r.data+'|'+encodeURIComponent(r.desc||'')+'|'+impStr+'|'+(r.tipo||'spesa');
+      const withId  = baseEnc+'|'+(r.id!=null?r.id:i);
+      const baseRaw = r.data+'|'+r.desc+'|'+impStr;
+      return hiddenSnapDash.some(k => k === withId || k === baseEnc || k.startsWith(baseRaw+'|') || k === baseRaw);
     };
     snapTx = (snap.recent||[])
       .filter(r => r.data && r.data.startsWith(currentMonth))
-      .filter(r => !_isHiddenSnap(r));
+      .filter((r, i) => !_isHiddenSnap(r, i));
     if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
-      snapTx = (snap.recent||[]).filter(r => !_isHiddenSnap(r));
+      snapTx = (snap.recent||[]).filter((r, i) => !_isHiddenSnap(r, i));
   }
 
   // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
@@ -1567,8 +1568,8 @@ function renderDashboard() {
       const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
       const mobileBadge = r._local
         ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
-      // Usa chiave normalizzata — non l'indice numerico che può essere -1 per mismatch importo
-      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa'));
+      // Usa ID Access come chiave stabile — distingue record identici senza dipendere dall'indice posizionale
+      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa')+'|'+(r.id!=null?r.id:idx));
       const deleteBtn = r._local
         ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
         : `<button class="tx-delete-btn" onclick="deleteSnapRecordByKey(event,'${snapKey}')" style="opacity:.6">✕</button>`;
