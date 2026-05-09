@@ -1614,7 +1614,8 @@ function _refreshCurrentPage() {
 
 function deleteSnapRecordByKey(e, encodedKey) {
   e.stopPropagation();
-  const key = encodedKey.replace(/\|([^|]+)\|/, (m, desc) => '|' + decodeURIComponent(desc) + '|');
+  // Salva la chiave encodata così com'è — _isHiddenSnap cerca con encodeURIComponent
+  const key = encodedKey;
   if (!key) { showToast('⚠ Chiave record non valida'); return; }
   if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
   const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
@@ -1622,8 +1623,8 @@ function deleteSnapRecordByKey(e, encodedKey) {
     hidden.push(key);
     localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
   }
-  // Estrai dati dalla chiave per il log cancellazioni
-  const parts = key.split('|');
+  // Estrai dati dalla chiave per il log cancellazioni (decodifica solo per display)
+  const parts = key.split('|').map((p,i) => i===1 ? decodeURIComponent(p) : p);
   const DKEY = 'budget_deleted_log';
   const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
   const tipoLog = (parts[3]||'spesa') === 'entrata' ? 'en' : 'sp';
