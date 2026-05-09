@@ -1619,10 +1619,12 @@ function deleteSnapRecordByKey(e, encodedKey) {
   if (!key) { showToast('⚠ Chiave record non valida'); return; }
   if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
   const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  if (!hidden.includes(key)) {
-    hidden.push(key);
-    localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
+  if (hidden.includes(key)) {
+    showToast('⚠ Record già nascosto');
+    return;
   }
+  hidden.push(key);
+  localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
   // Estrai dati dalla chiave per il log cancellazioni (decodifica solo per display)
   const parts = key.split('|').map((p,i) => i===1 ? decodeURIComponent(p) : p);
   const DKEY = 'budget_deleted_log';
