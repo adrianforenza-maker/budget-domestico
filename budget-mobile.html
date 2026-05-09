@@ -944,8 +944,17 @@ async function driveUploadCSV() {
   const btn = document.getElementById('drive-upload-csv-btn');
   if (btn) btn.textContent = '⏳ Upload...';
   try {
-    // Usa _driveWithToken per gestire correttamente il refresh su iOS
-    await _driveEnsureToken();
+    await _driveEnsureToken().catch(async (e) => {
+      if (e.message === 'silent_refresh_failed' || !_driveToken) {
+        await new Promise((res, rej) => {
+          const client = google.accounts.oauth2.initTokenClient({
+            client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPES,
+            callback: (r) => { if (r.error) rej(r.error); else { _driveSaveToken(r.access_token, r.expires_in); _driveUpdateUI(true); res(); } }
+          });
+          client.requestAccessToken();
+        });
+      }
+    });
     const folderId = await _driveEnsureFolder();
     if (!folderId) { showToast('❌ Cartella Drive non trovata', 'error'); return; }
 
