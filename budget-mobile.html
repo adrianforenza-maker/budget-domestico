@@ -1021,6 +1021,26 @@ async function driveUploadCSV() {
     const searchData = await searchResp.json();
     const existingId = searchData.files?.[0]?.id;
 
+    // Se il file esiste già, confronta il contenuto — se identico non caricare
+    if (existingId) {
+      try {
+        const prevResp = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${existingId}?alt=media`,
+          { headers: { Authorization: `Bearer ${_driveToken}` } }
+        );
+        if (prevResp.ok) {
+          const prevContent = await prevResp.text();
+          // Confronta ignorando BOM e whitespace finale
+          const normalize = s => s.replace(/^﻿/,'').trim();
+          if (normalize(prevContent) === normalize(csvContent)) {
+            showToast('ℹ Nessuna modifica da inviare — Drive già aggiornato', 'info');
+            if (btn) btn.textContent = origText;
+            return;
+          }
+        }
+      } catch(e) { /* se non riesce a scaricare, procede comunque con l'upload */ }
+    }
+
     let uploadResp;
     if (existingId) {
       // Sovrascrive il file esistente
