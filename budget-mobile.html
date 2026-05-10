@@ -1031,9 +1031,8 @@ async function driveUploadCSV() {
       throw new Error(`Upload fallito: ${uploadResp.status} — ${errText.slice(0,120)}`);
     }
 
-    // Marca come esportati e svuota log cancellazioni
-    const DKEY3c = 'budget_deleted_log';
-    localStorage.removeItem(DKEY3c);
+    // Non svuota deleted_log — verrà pulito solo quando arriva il nuovo snapshot dal desktop
+    // (che conferma che il CSV è stato processato)
     // Non marca come exported (vedi logica exportCSV) — nessun salvataggio necessario
     renderExportStats();
     const nDel = delLogD.length;
@@ -2299,7 +2298,7 @@ function exportCSV() {
   a.download = `budget-iphone-${now.toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  localStorage.removeItem(DKEY2);
+  // Non svuota deleted_log — verrà pulito solo all'arrivo del nuovo snapshot dal desktop
 
   // Non marca come exported — il CSV successivo includerà ancora questi record
   // finché il desktop non li importa. La deduplicazione sul desktop evita duplicati.
