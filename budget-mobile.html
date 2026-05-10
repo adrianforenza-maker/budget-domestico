@@ -1575,23 +1575,14 @@ function renderDashboard() {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>';
   } else {
     window._snapTxCache = snapTx;
-    // Calcola indice occorrenza per distinguere record duplicati (stessa data|desc|importo|tipo)
-    const _occCount = {};
-    const _getOccIdx = r => {
-      const k = r.data+'|'+(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa');
-      const n = _occCount[k] = (_occCount[k] || 0);
-      _occCount[k]++;
-      return n;
-    };
     el.innerHTML = allTx.map((r, idx) => {
       const sign = r.tipo==='spesa' ? '-' : '+';
       const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
       const mobileBadge = r._local
         ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
-      // Chiave con indice occorrenza: data|desc|importo|tipo|N
-      // N distingue il primo dal secondo record identico
-      const occIdx = r._local ? 0 : _getOccIdx(r);
-      const snapKey = r._local ? '' : (r.data+'|'+(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa')+'|'+occIdx);
+      // Usa r._occIdx assegnato sull'array originale NON filtrato
+      // (ricalcolarlo su allTx filtrato causerebbe indici sbagliati dopo la prima cancellazione)
+      const snapKey = r._local ? '' : (r.data+'|'+(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa')+'|'+(r._occIdx||0));
       const deleteBtn = r._local
         ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
         : `<button class="tx-delete-btn" onclick="deleteSnapRecordByKey(event,'${snapKey}')" style="opacity:.6">✕</button>`;
