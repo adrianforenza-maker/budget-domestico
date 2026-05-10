@@ -1034,8 +1034,7 @@ async function driveUploadCSV() {
     // Marca come esportati e svuota log cancellazioni
     const DKEY3c = 'budget_deleted_log';
     localStorage.removeItem(DKEY3c);
-    // Non marca come exported (vedi logica exportCSV)
-    localStorage.setItem(DB_KEY, JSON.stringify(updated));
+    // Non marca come exported (vedi logica exportCSV) — nessun salvataggio necessario
     renderExportStats();
     const nDel = delLogD.length;
     showToast(`✓ ${records.length} record + ${nDel} cancellaz. inviati su Drive`, 'success');
