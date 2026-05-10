@@ -619,7 +619,7 @@ function _driveRestoreToken() {
         }).toString()
       }).then(r => r.json()).then(tokens => {
         if (tokens.access_token) {
-          _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token || refreshToken);
+          _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
           _driveUpdateUI(true);
         } else {
           // Refresh fallito — richiedi login
@@ -669,7 +669,7 @@ async function driveConnect() {
           });
           const tokens = await resp.json();
           if (tokens.access_token) {
-            _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token || refreshToken);
+            _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
             _driveUpdateUI(true);
             showToast('✓ Sessione Drive rinnovata!', 'success');
             return;
@@ -776,7 +776,7 @@ async function _driveEnsureToken() {
   });
   const tokens = await resp.json();
   if (tokens.access_token) {
-    _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token || refreshToken);
+    _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
     return tokens.access_token;
   }
   throw new Error('refresh_failed: ' + (tokens.error||'unknown'));
@@ -974,7 +974,7 @@ async function driveUploadCSV() {
     const fileName = `budget-mobile-${dateStr}-${timeStr}.csv`;
 
     // Header identico a exportCSV — compatibile con desktop processIphoneCSV
-    const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note,IDMobile';
+    const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
     const _catsD = getCats();
     // Aggiungi anche righe CANCELLATO dal log
     const DKEY3 = 'budget_deleted_log';
@@ -985,9 +985,9 @@ async function driveUploadCSV() {
       const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
       const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
       const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
-      return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}",${r.id||''}`;
+      return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
     });
-    const delRowsD = delLogD.filter(d => !d.isLocal).map(d => {
+    const delRowsD = delLogD.map(d => {
       const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
       const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
       return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
@@ -1071,7 +1071,7 @@ async function driveAutoSync() {
             });
             const tokens = await resp.json();
             if (tokens.access_token) {
-              _driveSaveToken(tokens.access_token, tokens.expires_in || 3599, tokens.refresh_token || refreshToken);
+              _driveSaveToken(tokens.access_token, tokens.expires_in || 3599);
               _driveUpdateUI(true);
             } else {
               if (btn) { btn.textContent = '☁ Drive'; btn.disabled = false; }
@@ -1096,7 +1096,7 @@ async function driveAutoSync() {
     // 2. Controlla record non esportati E cancellazioni pendenti
     const allRecords = JSON.parse(localStorage.getItem(DB_KEY) || '[]');
     const toExport   = allRecords.filter(r => !r.exported);
-    const delLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]').filter(d => !d.isLocal);
+    const delLog     = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
     const hasData    = toExport.length > 0 || delLog.length > 0;
     if (hasData) {
       let msg = '✓ Snapshot aggiornato!\n\n';
@@ -1537,21 +1537,17 @@ function renderDashboard() {
   const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
   let snapTx = [];
   if (snap) {
-    const _isHiddenSnap = (r, i) => {
-      const impStr  = parseFloat(r.importo||0).toFixed(2);
-      const baseEnc = r.data+'|'+encodeURIComponent(r.desc||'')+'|'+impStr+'|'+(r.tipo||'spesa');
-      const withId  = baseEnc+'|'+(r.id!=null?r.id:i);
-      // Se il record ha un ID Access, usa solo la chiave precisa con ID — no fallback greedy
-      if (r.id != null) return hiddenSnapDash.some(k => k === withId);
-      // Retrocompatibilità per record senza ID (snapshot vecchi)
-      const baseRaw = r.data+'|'+r.desc+'|'+impStr;
-      return hiddenSnapDash.some(k => k === withId || k === baseEnc || k.startsWith(baseRaw+'|') || k === baseRaw);
+    const _isHiddenSnap = r => {
+      const impStr = parseFloat(r.importo||0).toFixed(2);
+      const prefix = r.data+'|'+r.desc+'|'+impStr+'|';
+      const exact  = r.data+'|'+r.desc+'|'+impStr;
+      return hiddenSnapDash.some(k => k.startsWith(prefix) || k === exact);
     };
     snapTx = (snap.recent||[])
       .filter(r => r.data && r.data.startsWith(currentMonth))
-      .filter((r, i) => !_isHiddenSnap(r, i));
+      .filter(r => !_isHiddenSnap(r));
     if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
-      snapTx = (snap.recent||[]).filter((r, i) => !_isHiddenSnap(r, i));
+      snapTx = (snap.recent||[]).filter(r => !_isHiddenSnap(r));
   }
 
   // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
@@ -1571,8 +1567,8 @@ function renderDashboard() {
       const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
       const mobileBadge = r._local
         ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
-      // Usa ID Access come chiave stabile — distingue record identici senza dipendere dall'indice posizionale
-      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa')+'|'+(r.id!=null?r.id:idx));
+      // Usa chiave normalizzata — non l'indice numerico che può essere -1 per mismatch importo
+      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa'));
       const deleteBtn = r._local
         ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
         : `<button class="tx-delete-btn" onclick="deleteSnapRecordByKey(event,'${snapKey}')" style="opacity:.6">✕</button>`;
@@ -1614,19 +1610,16 @@ function _refreshCurrentPage() {
 
 function deleteSnapRecordByKey(e, encodedKey) {
   e.stopPropagation();
-  // Salva la chiave encodata così com'è — _isHiddenSnap cerca con encodeURIComponent
-  const key = encodedKey;
+  const key = encodedKey.replace(/\|([^|]+)\|/, (m, desc) => '|' + decodeURIComponent(desc) + '|');
   if (!key) { showToast('⚠ Chiave record non valida'); return; }
   if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
   const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  if (hidden.includes(key)) {
-    showToast('⚠ Record già nascosto');
-    return;
+  if (!hidden.includes(key)) {
+    hidden.push(key);
+    localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
   }
-  hidden.push(key);
-  localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
-  // Estrai dati dalla chiave per il log cancellazioni (decodifica solo per display)
-  const parts = key.split('|').map((p,i) => i===1 ? decodeURIComponent(p) : p);
+  // Estrai dati dalla chiave per il log cancellazioni
+  const parts = key.split('|');
   const DKEY = 'budget_deleted_log';
   const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
   const tipoLog = (parts[3]||'spesa') === 'entrata' ? 'en' : 'sp';
@@ -2266,20 +2259,20 @@ function exportCSV() {
   if (!records.length) { showToast('⚠ Nessun record da esportare'); return; }
 
   // Header CSV compatibile con il tool principale
-  const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note,IDMobile';
+  const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
   const rows   = records.map(r => {
     const arr  = r.tipo==='sp' ? cats.spese : cats.entrate;
     const cat  = arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
     const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
     const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
     const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
-    return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}",${r.id||''}`;
+    return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
   });
 
   // Aggiungi cancellazioni
   const DKEY2 = 'budget_deleted_log';
   const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]');
-  const delRows = delLog.filter(d => !d.isLocal).map(d => {
+  const delRows = delLog.map(d => {
     const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
     const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
     return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
