@@ -1537,17 +1537,30 @@ function renderDashboard() {
   const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
   let snapTx = [];
   if (snap) {
+    // Calcola indice occorrenza per ogni record snap (per matchare la chiave con indice)
+    const _snapOccCount = {};
+    const _assignOccIdx = r => {
+      const k = r.data+'|'+(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa');
+      const n = _snapOccCount[k] = (_snapOccCount[k] || 0);
+      _snapOccCount[k]++;
+      r._occIdx = n;
+      return r;
+    };
     const _isHiddenSnap = r => {
       const impStr = parseFloat(r.importo||0).toFixed(2);
-      const prefix = r.data+'|'+r.desc+'|'+impStr+'|';
-      const exact  = r.data+'|'+r.desc+'|'+impStr;
-      return hiddenSnapDash.some(k => k.startsWith(prefix) || k === exact);
+      const base   = r.data+'|'+(r.desc||'')+'|'+impStr+'|'+(r.tipo||'spesa');
+      const keyNew = base + '|' + (r._occIdx || 0);  // chiave con indice (nuovo formato)
+      const keyLeg = r.data+'|'+(r.desc||'')+'|'+impStr; // chiave legacy senza tipo/indice
+      return hiddenSnapDash.some(k => k === keyNew || k === keyLeg || k === base);
     };
-    snapTx = (snap.recent||[])
-      .filter(r => r.data && r.data.startsWith(currentMonth))
-      .filter(r => !_isHiddenSnap(r));
-    if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth)
-      snapTx = (snap.recent||[]).filter(r => !_isHiddenSnap(r));
+    const _rawSnap = (snap.recent||[]).filter(r => r.data && r.data.startsWith(currentMonth));
+    _rawSnap.forEach(_assignOccIdx);
+    snapTx = _rawSnap.filter(r => !_isHiddenSnap(r));
+    if (!snapTx.length && snap.months.at(-1)?.ym === currentMonth) {
+      const _allSnap = (snap.recent||[]);
+      _allSnap.forEach(_assignOccIdx);
+      snapTx = _allSnap.filter(r => !_isHiddenSnap(r));
+    }
   }
 
   // Deduplicazione: rimuovi dai locali quelli già presenti nello snap (stessa data+desc+importo)
@@ -1562,14 +1575,23 @@ function renderDashboard() {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>';
   } else {
     window._snapTxCache = snapTx;
+    // Calcola indice occorrenza per distinguere record duplicati (stessa data|desc|importo|tipo)
+    const _occCount = {};
+    const _getOccIdx = r => {
+      const k = r.data+'|'+(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa');
+      const n = _occCount[k] = (_occCount[k] || 0);
+      _occCount[k]++;
+      return n;
+    };
     el.innerHTML = allTx.map((r, idx) => {
       const sign = r.tipo==='spesa' ? '-' : '+';
       const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
       const mobileBadge = r._local
         ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
-      // Usa chiave normalizzata — non l'indice numerico che può essere -1 per mismatch importo
-      // Chiave snap normalizzata: data|desc|importo|tipo (desc NON encoded per coerenza con _isHiddenSnap)
-      const snapKey = r._local ? '' : (r.data+'|'+(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa'));
+      // Chiave con indice occorrenza: data|desc|importo|tipo|N
+      // N distingue il primo dal secondo record identico
+      const occIdx = r._local ? 0 : _getOccIdx(r);
+      const snapKey = r._local ? '' : (r.data+'|'+(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa')+'|'+occIdx);
       const deleteBtn = r._local
         ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
         : `<button class="tx-delete-btn" onclick="deleteSnapRecordByKey(event,'${snapKey}')" style="opacity:.6">✕</button>`;
