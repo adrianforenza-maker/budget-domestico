@@ -978,7 +978,8 @@ async function driveUploadCSV() {
     const _catsD = getCats();
     // Aggiungi anche righe CANCELLATO dal log
     const DKEY3 = 'budget_deleted_log';
-    const delLogD = JSON.parse(localStorage.getItem(DKEY3)||'[]');
+    const delLogD = JSON.parse(localStorage.getItem(DKEY3)||'[]')
+                    .filter(d => !d.isLocal); // escludi cancellazioni di record mai inviati al desktop
     const rows = records.map(r => {
       const _arr = r.tipo==='sp' ? _catsD.spese : _catsD.entrate;
       const cat = _arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
@@ -2283,7 +2284,8 @@ function exportCSV() {
 
   // Aggiungi cancellazioni
   const DKEY2 = 'budget_deleted_log';
-  const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]');
+  const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]')
+                  .filter(d => !d.isLocal); // escludi cancellazioni di record mai inviati al desktop
   const delRows = delLog.map(d => {
     const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
     const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
