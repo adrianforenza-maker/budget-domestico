@@ -1568,7 +1568,8 @@ function renderDashboard() {
       const mobileBadge = r._local
         ? `<span style="font-size:9px;background:rgba(245,161,36,.2);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:4px">📱</span>` : '';
       // Usa chiave normalizzata — non l'indice numerico che può essere -1 per mismatch importo
-      const snapKey = r._local ? '' : (r.data+'|'+encodeURIComponent(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa'));
+      // Chiave snap normalizzata: data|desc|importo|tipo (desc NON encoded per coerenza con _isHiddenSnap)
+      const snapKey = r._local ? '' : (r.data+'|'+(r.desc||'')+'|'+parseFloat(r.importo||0).toFixed(2)+'|'+(r.tipo||'spesa'));
       const deleteBtn = r._local
         ? `<button class="tx-delete-btn" onclick="deleteRecord(event,'${r._id}','')">✕</button>`
         : `<button class="tx-delete-btn" onclick="deleteSnapRecordByKey(event,'${snapKey}')" style="opacity:.6">✕</button>`;
@@ -1608,23 +1609,25 @@ function _refreshCurrentPage() {
   if (currentPage === 'spese-rapide') renderQuick();
 }
 
-function deleteSnapRecordByKey(e, encodedKey) {
+function deleteSnapRecordByKey(e, snapKey) {
   e.stopPropagation();
-  const key = encodedKey.replace(/\|([^|]+)\|/, (m, desc) => '|' + decodeURIComponent(desc) + '|');
-  if (!key) { showToast('⚠ Chiave record non valida'); return; }
+  // snapKey arriva già normalizzata (desc non encoded) dalla costruzione nello storico
+  if (!snapKey) { showToast('⚠ Chiave record non valida'); return; }
   if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
   const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  if (!hidden.includes(key)) {
-    hidden.push(key);
+  if (!hidden.includes(snapKey)) {
+    hidden.push(snapKey);
     localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
   }
   // Estrai dati dalla chiave per il log cancellazioni
-  const parts = key.split('|');
+  const parts = snapKey.split('|');
   const DKEY = 'budget_deleted_log';
   const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
+  // Normalizza tipo: lo snapshot usa 'spesa'/'entrata', il log usa 'sp'/'en'
   const tipoLog = (parts[3]||'spesa') === 'entrata' ? 'en' : 'sp';
+  const deletedAt = new Date().toISOString();
   log.push({ tipo:tipoLog, data:parts[0]||'', desc:parts[1]||'',
-             importo:parseFloat(parts[2]||0), idCat:null, note:'', deletedAt:new Date().toISOString() });
+             importo:parseFloat(parts[2]||0), idCat:null, note:'', deletedAt });
   localStorage.setItem(DKEY, JSON.stringify(log));
   showToast('✓ Nascosto — incluso nel prossimo sync Drive');
   _refreshCurrentPage();
@@ -1704,7 +1707,7 @@ function renderStorico() {
     <div style="margin-top:12px;padding:8px 12px;background:rgba(240,86,106,.06);border-radius:10px;border:1px solid rgba(240,86,106,.2)">
       <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px;letter-spacing:.5px">🗑 IN ATTESA DI SYNC (${pendingSync.length})</div>
       ${pendingSync.map((d, idx) => {
-        const isEn = d.tipo === 'en';
+        const isEn = d.tipo === 'en' || d.tipo === 'entrata';
         const col  = isEn ? 'var(--green)' : 'var(--red)';
         const sign = isEn ? '+' : '-';
         return `
@@ -1713,7 +1716,7 @@ function renderStorico() {
             <div style="font-size:13px;font-weight:600;color:var(--t2);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.desc||'—'}</div>
             <div style="font-size:11px;color:${col}">${fmtDate(d.data)} · ${sign} € ${eur(d.importo||0)}</div>
           </div>
-          <button onclick="revertDeletion(${idx})" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>
+          <button onclick="revertDeletion('${d.deletedAt}')" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>
         </div>`;
       }).join('')}
     </div>` : '';
@@ -1722,18 +1725,14 @@ function renderStorico() {
 }
 
 // Annulla una cancellazione pendente (prima che venga inviata su Drive)
-function revertDeletion(idx) {
+function revertDeletion(deletedAt) {
   const log = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
-  const pendingDel = log.filter(d => d.data && ym(d.data) === currentMonthSt);
-  const entry = pendingDel[idx];
+  // Cerca per deletedAt (ID univoco) — più robusto dell'indice numerico
+  const entry = log.find(d => d.deletedAt === deletedAt);
   if (!entry) return;
 
-  // Rimuovi dal log globale
-  const entryIdx = log.findIndex(d =>
-    d.data === entry.data && d.desc === entry.desc &&
-    Math.abs((d.importo||0) - (entry.importo||0)) < 0.01 &&
-    d.deletedAt === entry.deletedAt
-  );
+  // Rimuovi dal log globale (cerca per deletedAt che è univoco)
+  const entryIdx = log.findIndex(d => d.deletedAt === entry.deletedAt);
   if (entryIdx >= 0) log.splice(entryIdx, 1);
   localStorage.setItem('budget_deleted_log', JSON.stringify(log));
 
