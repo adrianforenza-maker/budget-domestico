@@ -1034,7 +1034,7 @@ async function driveUploadCSV() {
     // Marca come esportati e svuota log cancellazioni
     const DKEY3c = 'budget_deleted_log';
     localStorage.removeItem(DKEY3c);
-    const updated = allRecords.map(r => records.find(x=>x.id===r.id) ? {...r, exported:true} : r);
+    // Non marca come exported (vedi logica exportCSV)
     localStorage.setItem(DB_KEY, JSON.stringify(updated));
     renderExportStats();
     const nDel = delLogD.length;
@@ -2302,12 +2302,8 @@ function exportCSV() {
   URL.revokeObjectURL(url);
   localStorage.removeItem(DKEY2);
 
-  // Marca come esportati
-  const updated = allRecords.map(r => {
-    if (records.find(x=>x.id===r.id)) return {...r, exported:true};
-    return r;
-  });
-  saveRecords(updated);
+  // Non marca come exported — il CSV successivo includerà ancora questi record
+  // finché il desktop non li importa. La deduplicazione sul desktop evita duplicati.
   showToast(`✓ ${records.length} record esportati${delLog.length?' + '+delLog.length+' cancellaz.':''}`);
   renderExportStats();
 }
