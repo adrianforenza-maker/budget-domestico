@@ -2021,6 +2021,16 @@ function _cleanLocalAfterSnapshot(snap) {
   // non ci sono già più. Tenere hidden_snap causa bilancio sbagliato.
   localStorage.removeItem('budget_hidden_snap');
 
+  // Svuota deleted_log — il nuovo snapshot conferma che il desktop ha processato
+  // il CSV con le cancellazioni. Teniamo solo le cancellazioni più recenti dello snapshot
+  // (quelle create DOPO la data di export dello snapshot, non ancora viste dal desktop).
+  const snapExportedAt = snap.exportedAt || '1970-01-01T00:00:00Z';
+  const deletedLog = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
+  const stillPending = deletedLog.filter(d => d.deletedAt && d.deletedAt > snapExportedAt);
+  if (stillPending.length < deletedLog.length) {
+    localStorage.setItem('budget_deleted_log', JSON.stringify(stillPending));
+  }
+
   const locals = getRecords();
   if (!locals.length) return;
 
