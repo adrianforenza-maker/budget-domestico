@@ -368,6 +368,12 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
     <input type="text" class="form-ctrl" id="reg-note" placeholder="Opzionale...">
   </div>
 
+  <!-- Banner modalità modifica (visibile solo in edit) -->
+  <div id="edit-mode-banner" style="display:none;background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.3);border-radius:12px;padding:10px 14px;margin-bottom:10px;display:none;align-items:center;justify-content:space-between">
+    <div style="font-size:12px;color:var(--accent);font-weight:700">✎ Modalità modifica</div>
+    <button onclick="cancelEdit()" style="background:none;border:none;color:var(--t3);font-size:12px;cursor:pointer;padding:4px 8px;border-radius:8px;border:1px solid var(--border)">✕ Annulla</button>
+  </div>
+
   <button class="btn btn-primary sp" id="btn-salva" onclick="salvaRecord()" style="margin-bottom:20px">
     + Aggiungi Uscita
   </button>
@@ -1621,21 +1627,35 @@ function editRecord(e, sbId, tipo) {
   const rec = arr.find(r => r.sbId === sbId);
   if (!rec) return;
 
-  // Precompila il form di registrazione con i dati del record
-  document.getElementById('reg-desc').value  = rec.desc || '';
-  document.getElementById('reg-note').value  = rec.note || '';
-  document.getElementById('reg-data').value  = rec.data;
-  amountStr  = rec.importo.toString();
+  // Salva l'ID del record in modifica PRIMA di setType (che resetta selectedCat)
+  window._editingSbId  = sbId;
+  window._editingTipo  = tipo;
+
+  // Imposta tipo e categoria PRIMA di renderCatGrid
   currentType = rec.tipo === 'spesa' ? 'sp' : 'en';
   selectedCat = rec.idCat;
 
-  // Salva l'ID del record in modifica
-  window._editingSbId   = sbId;
-  window._editingTipo   = tipo;
+  // setType aggiorna UI ma non deve azzerare selectedCat — lo proteggiamo
+  const _saved = selectedCat;
+  setType(currentType);          // resetta selectedCat = null internamente
+  selectedCat = _saved;          // ripristino
 
-  setType(currentType);
+  // Precompila i campi
+  document.getElementById('reg-desc').value = rec.desc || '';
+  document.getElementById('reg-note').value = rec.note || '';
+  document.getElementById('reg-data').value = rec.data;
+  amountStr = rec.importo.toString();
+
+  // Aggiorna UI con categoria e importo corretti
+  renderCatGrid();               // ora selectedCat è settato → voce selezionata
   updateAmountDisplay();
-  renderCatGrid();
+
+  // Mostra banner edit-mode e aggiorna testo pulsante salva
+  const banner = document.getElementById('edit-mode-banner');
+  if (banner) banner.style.display = 'flex';
+  const btnSalva = document.getElementById('btn-salva');
+  if (btnSalva) { btnSalva.textContent = '✓ Salva modifiche'; btnSalva.style.background = 'var(--accent)'; }
+
   showPage('registra');
   showToast('✎ Modifica il record e premi Salva');
 }
@@ -1674,7 +1694,7 @@ function tapQuick(id) {
     const tipoQ   = (q.tipo === 'en') ? 'entrata' : 'spesa';
     const table   = (q.tipo === 'en') ? 'entrate' : 'spese';
     const catArr  = (q.tipo === 'en') ? _DB.categorie.entrate : _DB.categorie.spese;
-    const catObj  = catArr.find(c => c.ID === q.idCat) || { ID: q.idCat, Nome: q.cat||'', Colore: '#9aa3c2' };
+    const catObj  = catArr.find(c => c.ID == q.idCat) || { ID: q.idCat, Nome: q.cat||'', Colore: '#9aa3c2' };
     const dataVal = today();
 
     try {
@@ -1852,13 +1872,25 @@ function renderCatGrid() {
   const el   = document.getElementById('cat-select');
   if (!el) return;
   el.innerHTML = '<option value="">— Seleziona categoria —</option>' +
-    arr.map(c => `<option value="${c.ID}" ${selectedCat===c.ID?'selected':''}>${c.Nome}</option>`).join('');
+    arr.map(c => `<option value="${c.ID}" ${selectedCat==c.ID?'selected':''}>${c.Nome}</option>`).join('');
 }
 
 function selectCat(id) {
   selectedCat = id;
   const el = document.getElementById('cat-select');
   if (el) el.value = id;
+}
+
+function cancelEdit() {
+  window._editingSbId = null;
+  window._editingTipo = null;
+  // Ripristina banner e pulsante
+  const banner = document.getElementById('edit-mode-banner');
+  if (banner) banner.style.display = 'none';
+  // Ripristina testo pulsante in base al tipo corrente
+  setType(currentType);
+  // Torna allo storico
+  showPage('storico');
 }
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -1926,6 +1958,10 @@ async function salvaRecord() {
     document.getElementById('reg-data').value = today();
     updateAmountDisplay();
     renderCatGrid();
+    // Ripristina banner edit-mode e testo pulsante
+    const banner = document.getElementById('edit-mode-banner');
+    if (banner) banner.style.display = 'none';
+    setType(currentType);
     _refreshCurrentPage();
 
   } catch(err) {
