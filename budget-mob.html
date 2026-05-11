@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="icon-budget.png">
 <title>Budget Domestico</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-layer.js"></script>
+<script src="supabase-layer.js" defer></script>
 <style>
 :root {
   --bg:     #0d0f1a;
@@ -1330,9 +1330,10 @@ function renderBilancio() {
   const lastM  = months.at(-1);
   const bilCol = lastM.saldo >= 0 ? 'var(--green)' : 'var(--red)';
 
-  // Top categorie (tutte le spese)
+  // Top categorie (solo mese corrente)
+  const nowYM = today().slice(0,7);
   const catTotMap = {};
-  _DB.spese.forEach(r => {
+  _DB.spese.filter(r => r.data.startsWith(nowYM)).forEach(r => {
     if (!catTotMap[r.catNome]) catTotMap[r.catNome] = { nome: r.catNome, colore: r.catColore, totale: 0 };
     catTotMap[r.catNome].totale += r.importo;
   });
@@ -2540,7 +2541,9 @@ async function sbSyncNow() {
 init();
 
 // Avvio Supabase: controlla sessione e carica tutti i dati
-sbInit(async () => {
+// defer garantisce che supabase-layer.js sia caricato prima di questo punto
+document.addEventListener('_sbLayerReady', async function() {
+  await sbInit(async () => {
   const ok = await loadData();
   if (ok) {
     renderDashboard();
@@ -2552,6 +2555,7 @@ sbInit(async () => {
     if (statusTxt && user) statusTxt.textContent = `✓ Connesso come ${user.email}`;
     if (logoutBtn) logoutBtn.style.display = '';
   }
+  });
 });
 
 </script>
