@@ -1817,9 +1817,14 @@ function saveQuick() {
   const idCat   = parseInt(document.getElementById('qf-cat').value);
   const desc    = document.getElementById('qf-desc').value.trim();
 
+  // Salva anche il nome categoria per permettere rimappatura in caso di cambio DB
+  const allCats = [...(_DB.categorie.spese||[]), ...(_DB.categorie.entrate||[])];
+  const catObj  = allCats.find(c => c.ID == idCat);
+  const catNome = catObj ? catObj.Nome : '';
+
   const list = getQuick();
   const idx  = list.findIndex(q => q.id === id);
-  const item = { id, emoji, nome, importo, idCat, desc };
+  const item = { id, emoji, nome, importo, idCat, catNome, desc };
   if (idx >= 0) list[idx] = item; else list.push(item);
   saveQuickList(list);
   closeQuickForm();
@@ -2345,7 +2350,18 @@ function resetAll() {
 function exportQuickBackup() {
   const list = getQuick();
   if (!list.length) { showToast('⚠ Nessuna spesa rapida da salvare'); return; }
-  const blob = new Blob([JSON.stringify({type:'quick-backup',v:1,data:list}, null, 2)],
+
+  // Arricchisce ogni quick con catNome attuale da _DB (per rimappatura futura)
+  const catMapById = {};
+  [...(_DB.categorie.spese||[]), ...(_DB.categorie.entrate||[])].forEach(c => {
+    catMapById[c.ID] = c.Nome;
+  });
+  const enriched = list.map(q => ({
+    ...q,
+    catNome: q.catNome || catMapById[q.idCat] || ''
+  }));
+
+  const blob = new Blob([JSON.stringify({type:'quick-backup',v:2,data:enriched}, null, 2)],
                         {type:'application/json'});
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
@@ -2364,9 +2380,35 @@ function importQuickBackup(e) {
       const parsed = JSON.parse(ev.target.result);
       const list   = parsed.type === 'quick-backup' ? parsed.data : parsed;
       if (!Array.isArray(list)) { showToast('⚠ File non valido'); return; }
-      saveQuickList(list);
+
+      // Rimappa idCat: il JSON viene dal vecchio sistema con ID Access/localStorage
+      // diversi dagli ID Supabase. Usiamo catNome (se presente nel JSON) per
+      // trovare il corrispondente ID nelle categorie Supabase già caricate in _DB.
+      const catMapByName = {};
+      [...(_DB.categorie.spese||[]), ...(_DB.categorie.entrate||[])].forEach(c => {
+        catMapByName[c.Nome.toLowerCase()] = c.ID;
+      });
+
+      let remapped = 0;
+      const notFound = [];
+      const remappedList = list.map(q => {
+        const q2 = { ...q };
+        const nomeToSearch = (q.catNome || '').toLowerCase();
+        if (nomeToSearch && catMapByName[nomeToSearch] !== undefined) {
+          q2.idCat = catMapByName[nomeToSearch];
+          remapped++;
+        } else if (!nomeToSearch) {
+          notFound.push(q.nome);
+        }
+        return q2;
+      });
+
+      saveQuickList(remappedList);
       renderQuickGrid();
-      showToast(`✓ ${list.length} spese rapide ripristinate`);
+      let msg = `✓ ${list.length} spese rapide ripristinate`;
+      if (remapped > 0) msg += `, ${remapped} categorie rimappate`;
+      if (notFound.length) msg += ` · ⚠ ${notFound.length} senza categoria`;
+      showToast(msg, notFound.length ? 'error' : 'success', 4000);
     } catch { showToast('⚠ Errore lettura file'); }
     e.target.value = '';
   };
