@@ -42,18 +42,16 @@ async function sbIsLoggedIn() {
 }
 
 // ── Fetch tutti i record con paginazione (supera limite 1000) ────
-async function _fetchAll(table, orderCol, ascending = false, fromDate = null) {
-  const PAGE = 2000;
+async function _fetchAll(table, orderCol, ascending = false) {
+  const PAGE = 1000;
   let all = [];
   let from = 0;
   while (true) {
-    let query = _sb
+    const { data, error } = await _sb
       .from(table)
       .select('*')
-      .order(orderCol, { ascending });
-    if (fromDate) query = query.gte('data', fromDate);
-    query = query.range(from, from + PAGE - 1);
-    const { data, error } = await query;
+      .order(orderCol, { ascending })
+      .range(from, from + PAGE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
     all = all.concat(data);
@@ -61,13 +59,6 @@ async function _fetchAll(table, orderCol, ascending = false, fromDate = null) {
     from += PAGE;
   }
   return all;
-}
-
-function _lastNMonthsDate(n) {
-  const d = new Date();
-  d.setMonth(d.getMonth() - n + 1);
-  d.setDate(1);
-  return d.toISOString().slice(0, 10);
 }
 
 // ── Normalizzazione dati Supabase → formato interno app ─────────
@@ -514,6 +505,3 @@ async function sbLogoutMobile() {
   await sbSignOut();
   if (typeof showToast === 'function') showToast('Disconnesso da Supabase');
 }
-
-// Notifica che il layer è pronto (usato da budget-mob.html)
-if (typeof document !== 'undefined') document.dispatchEvent(new Event('_sbLayerReady'));
