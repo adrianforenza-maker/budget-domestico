@@ -1280,18 +1280,17 @@ function renderBilancio() {
   if (!_dbLoaded) return;
   const el   = document.getElementById('bilancio-content');
   const mesi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
-  let modo   = localStorage.getItem('bilModoEntrate') || 'corrente';
+  let modo   = localStorage.getItem('bilModoEntrate') || 'prec';
 
-  // Calcola mesi aggregati da _DB
+  // ── Calcola mesi aggregati da _DB ──────────────────────────────
   const monthMap = {};
   [..._DB.spese, ..._DB.entrate].forEach(r => {
-    const ym = r.data.slice(0,7);
-    if (!monthMap[ym]) monthMap[ym] = { ym, spese: 0, entrate: 0 };
-    if (r.tipo === 'spesa')   monthMap[ym].spese   += r.importo;
-    if (r.tipo === 'entrata') monthMap[ym].entrate += r.importo;
+    const ymR = r.data.slice(0,7);
+    if (!monthMap[ymR]) monthMap[ymR] = { ym: ymR, spese: 0, entrate: 0 };
+    if (r.tipo === 'spesa')   monthMap[ymR].spese   += r.importo;
+    if (r.tipo === 'entrata') monthMap[ymR].entrate += r.importo;
   });
   const months = Object.values(monthMap)
-    .map(m => ({ ...m, saldo: m.entrate - m.spese }))
     .sort((a,b) => a.ym.localeCompare(b.ym));
 
   if (!months.length) {
@@ -1299,23 +1298,47 @@ function renderBilancio() {
     return;
   }
 
+  // ── Calcola entratePrec e saldoBil per ogni mese ───────────────
+  // "Mese Prec.": le entrate di riferimento del mese M sono quelle del mese M-1
+  // (logica identica all'app desktop — lo stipendio arriva il mese dopo rispetto alle spese)
+  months.forEach((m, i) => {
+    if (i === 0) {
+      m.entratePrec = m.entrate; // primo mese: non c'è precedente
+      m.ymPrec = null;
+    } else {
+      m.entratePrec = months[i-1].entrate;
+      m.ymPrec      = months[i-1].ym;
+    }
+    m.saldo    = m.entrate - m.spese;
+    m.saldoBil = m.entratePrec - m.spese;
+  });
+
+  const getSaldo = m => modo === 'prec' ? m.saldoBil : m.saldo;
+  const getEn    = m => modo === 'prec' ? m.entratePrec : m.entrate;
+  const getEnLbl = m => {
+    if (modo !== 'prec') return mesi[parseInt(m.ym.split('-')[1])-1];
+    if (m.ymPrec) return mesi[parseInt(m.ymPrec.split('-')[1])-1] + ' ' + m.ymPrec.split('-')[0];
+    return 'Prec.';
+  };
+
   const annoCorrente = new Date().getFullYear().toString();
-  const mesiAnno     = months.filter(m => m.ym.startsWith(annoCorrente));
-  const ytdEntrate   = mesiAnno.reduce((s,m) => s + m.entrate, 0);
-  const ytdSpese     = mesiAnno.reduce((s,m) => s + m.spese, 0);
-  const ytdSaldo     = mesiAnno.reduce((s,m) => s + m.saldo, 0);
+  const mesiAnno   = months.filter(m => m.ym.startsWith(annoCorrente));
+  const ytdEntrate = mesiAnno.reduce((s,m) => s + getEn(m), 0);
+  const ytdSpese   = mesiAnno.reduce((s,m) => s + m.spese, 0);
+  const ytdSaldo   = mesiAnno.reduce((s,m) => s + getSaldo(m), 0);
 
   const last6  = months.slice(-6);
-  const maxVal = Math.max(...last6.map(m => Math.max(m.entrate, m.spese)), 1);
+  const maxVal = Math.max(...last6.map(m => Math.max(getEn(m), m.spese)), 1);
   const bars   = last6.map(m => {
-    const [y,mo] = m.ym.split('-');
-    const label  = mesi[parseInt(mo)-1];
-    const hSp    = Math.round((m.spese/maxVal)*60);
-    const hEn    = Math.round((m.entrate/maxVal)*60);
-    const sColor = m.saldo >= 0 ? 'var(--green)' : 'var(--red)';
-    const sVal   = Math.abs(m.saldo) >= 1000
-      ? (m.saldo<0?'-':'')+(Math.abs(m.saldo)/1000).toFixed(1)+'k'
-      : Math.round(m.saldo);
+    const [,mo] = m.ym.split('-');
+    const label = mesi[parseInt(mo)-1];
+    const hSp   = Math.round((m.spese/maxVal)*60);
+    const hEn   = Math.round((getEn(m)/maxVal)*60);
+    const sal   = getSaldo(m);
+    const sColor = sal >= 0 ? 'var(--green)' : 'var(--red)';
+    const sVal  = Math.abs(sal) >= 1000
+      ? (sal<0?'-':'')+(Math.abs(sal)/1000).toFixed(1)+'k'
+      : Math.round(sal);
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
       <div style="font-size:9px;color:var(--t3);font-weight:700">${label}</div>
       <div style="display:flex;gap:2px;align-items:flex-end;height:64px">
@@ -1326,10 +1349,13 @@ function renderBilancio() {
     </div>`;
   }).join('');
 
-  const lastM  = months.at(-1);
-  const bilCol = lastM.saldo >= 0 ? 'var(--green)' : 'var(--red)';
+  const lastM    = months.at(-1);
+  const lastSal  = getSaldo(lastM);
+  const lastEn   = getEn(lastM);
+  const lastEnLbl = getEnLbl(lastM);
+  const bilCol   = lastSal >= 0 ? 'var(--green)' : 'var(--red)';
 
-  // Top categorie (solo mese corrente)
+  // Top categorie mese corrente
   const nowYM = today().slice(0,7);
   const catTotMap = {};
   _DB.spese.filter(r => r.data.startsWith(nowYM)).forEach(r => {
@@ -1347,6 +1373,18 @@ function renderBilancio() {
     </div>`;
   }).join('');
 
+  const toggleHtml = `
+    <div style="display:flex;gap:0;border:1px solid rgba(255,255,255,.15);border-radius:8px;overflow:hidden;margin-bottom:14px;font-size:12px;font-weight:700">
+      <button onclick="setBilModo('prec')"
+        style="flex:1;padding:8px;border:none;cursor:pointer;transition:all .15s;background:${modo==='prec'?'var(--accent)':'transparent'};color:${modo==='prec'?'#fff':'var(--t3)'}">
+        📅 Mese Prec.
+      </button>
+      <button onclick="setBilModo('corrente')"
+        style="flex:1;padding:8px;border:none;cursor:pointer;transition:all .15s;background:${modo==='corrente'?'var(--green)':'transparent'};color:${modo==='corrente'?'#fff':'var(--t3)'}">
+        📆 Stesso Mese
+      </button>
+    </div>`;
+
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div>
@@ -1354,8 +1392,10 @@ function renderBilancio() {
         <div style="font-size:12px;font-weight:600">${_DB.spese.length + _DB.entrate.length} record totali</div>
       </div>
       <button class="btn" style="padding:7px 12px;font-size:11px;background:var(--bg3);color:var(--accent);border:1px solid var(--accent);width:auto"
-        onclick="loadData().then(renderBilancio)">🔄 Aggiorna</button>
+        onclick="loadData().then(() => renderBilancio())">🔄 Aggiorna</button>
     </div>
+
+    ${toggleHtml}
 
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">ANNO ${annoCorrente} — RIEPILOGO</div>
@@ -1379,8 +1419,8 @@ function renderBilancio() {
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">ULTIMI 6 MESI</div>
       <div style="display:flex;gap:4px;align-items:flex-end">${bars}</div>
-      <div style="display:flex;gap:8px;margin-top:8px;justify-content:center">
-        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--green);border-radius:2px"></div>Entrate</div>
+      <div style="display:flex;gap:8px;margin-top:8px;justify-content:center;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--green);border-radius:2px"></div>${modo==='prec'?'Entr. rif.':'Entrate'}</div>
         <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--red);border-radius:2px"></div>Uscite</div>
       </div>
     </div>
@@ -1391,8 +1431,8 @@ function renderBilancio() {
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--t3)">Entrate</div>
-          <div style="font-size:15px;font-weight:800;color:var(--green)">€ ${eur(lastM.entrate)}</div>
+          <div style="font-size:10px;color:var(--t3)">Entr. rif. (${lastEnLbl})</div>
+          <div style="font-size:15px;font-weight:800;color:var(--green)">€ ${eur(lastEn)}</div>
         </div>
         <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--t3)">Uscite</div>
@@ -1401,13 +1441,13 @@ function renderBilancio() {
       </div>
       <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
         <div style="font-size:10px;color:var(--t3);margin-bottom:2px">BILANCIO</div>
-        <div style="font-size:22px;font-weight:800;color:${bilCol}">${lastM.saldo<0?'-':''}€ ${eur(Math.abs(lastM.saldo))}</div>
+        <div style="font-size:22px;font-weight:800;color:${bilCol}">${lastSal<0?'-':''}€ ${eur(Math.abs(lastSal))}</div>
       </div>
     </div>
 
     ${topCatSorted.length ? `
     <div class="card">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE — TOTALE</div>
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE — MESE CORRENTE</div>
       ${topCatHtml}
     </div>` : ''}`;
 }
@@ -1628,27 +1668,49 @@ function tapQuick(id) {
   const q = list.find(x => x.id === id);
   if (!q) return;
 
-  const doSave = (importo) => {
+  const doSave = async (importo) => {
     if (!importo || importo <= 0) { showToast('⚠ Importo non valido'); return; }
-    const record = {
-      id: genId(), tipo: 'sp', data: today(),
-      desc: q.desc || q.nome, importo,
-      idCat: q.idCat, note: '', exported: false,
-      createdAt: new Date().toISOString()
-    };
-    const records = getRecords();
-    records.push(record);
-    saveRecords(records);
-    showToast(`✓ ${q.emoji||'💸'} ${q.nome} — € ${eur(importo)} registrato`);
-    if (currentPage === 'dashboard') renderDashboard();
-    if (_dbLoaded) renderBilancio();
+
+    const tipoQ   = (q.tipo === 'en') ? 'entrata' : 'spesa';
+    const table   = (q.tipo === 'en') ? 'entrate' : 'spese';
+    const catArr  = (q.tipo === 'en') ? _DB.categorie.entrate : _DB.categorie.spese;
+    const catObj  = catArr.find(c => c.ID === q.idCat) || { ID: q.idCat, Nome: q.cat||'', Colore: '#9aa3c2' };
+    const dataVal = today();
+
+    try {
+      const user = await sbCurrentUser();
+      if (!user) { showToast('❌ Non autenticato'); return; }
+
+      const row = {
+        data:        dataVal,
+        descrizione: q.desc || q.nome,
+        importo:     importo,
+        categoria:   catObj.Nome,
+        note:        '',
+        user_id:     user.id
+      };
+      const { data, error } = await _sb.from(table).insert(row).select().single();
+      if (error) throw error;
+
+      const newRec = {
+        sbId: data.id, tipo: tipoQ, data: dataVal,
+        desc: q.desc || q.nome, importo,
+        idCat: catObj.ID, cat: catObj.Nome,
+        catNome: catObj.Nome, catColore: catObj.Colore, note: ''
+      };
+      if (q.tipo === 'en') _DB.entrate.unshift(newRec);
+      else                 _DB.spese.unshift(newRec);
+
+      showToast(`✓ ${q.emoji||'💸'} ${q.nome} — € ${eur(importo)} registrato`);
+      _refreshCurrentPage();
+    } catch(err) {
+      showToast('❌ Errore: ' + err.message, 'error');
+    }
   };
 
   if (q.importo > 0) {
-    // Importo fisso: salva subito con conferma toast
     doSave(q.importo);
   } else {
-    // Importo variabile: chiede l'importo
     const val = prompt(`${q.emoji||'💸'} ${q.nome}\nInserisci importo (€):`);
     if (val === null) return;
     const n = parseFloat(val.replace(',','.'));
