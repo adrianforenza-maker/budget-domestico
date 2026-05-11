@@ -42,16 +42,18 @@ async function sbIsLoggedIn() {
 }
 
 // ── Fetch tutti i record con paginazione (supera limite 1000) ────
-async function _fetchAll(table, orderCol, ascending = false) {
+async function _fetchAll(table, orderCol, ascending = false, fromDate = null) {
   const PAGE = 2000;
   let all = [];
   let from = 0;
   while (true) {
-    const { data, error } = await _sb
+    let query = _sb
       .from(table)
       .select('*')
       .order(orderCol, { ascending })
       .range(from, from + PAGE - 1);
+    if (fromDate) query = query.gte('data', fromDate);
+    const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
     all = all.concat(data);
@@ -59,6 +61,13 @@ async function _fetchAll(table, orderCol, ascending = false) {
     from += PAGE;
   }
   return all;
+}
+
+function _lastNMonthsDate(n) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n + 1);
+  d.setDate(1);
+  return d.toISOString().slice(0, 10);
 }
 
 // ── Normalizzazione dati Supabase → formato interno app ─────────
@@ -419,90 +428,41 @@ async function sbSyncLoad() {
       entrate: (rCatsEn.data || []).map(r => ({ ID: r.id, Nome: r.nome, Colore: r.colore }))
     };
 
-    // Mappa categorie per nome
-    const catMapSp = {}; cats.spese.forEach(c => { catMapSp[c.Nome?.toLowerCase()] = c; });
-    const catMapEn = {}; cats.entrate.forEach(c => { catMapEn[c.Nome?.toLowerCase()] = c; });
+    const catMapSp = {}; cats.spese.forEach(c => { catMapSp[c.Nome?.toLowerCase()] = c.ID; });
+    const catMapEn = {}; cats.entrate.forEach(c => { catMapEn[c.Nome?.toLowerCase()] = c.ID; });
 
-    // Costruisci allRecords nel formato snapshot (compatibile con PWA)
-    const allRecords = [
-      ...(speseData || []).map(r => {
-        const catObj = catMapSp[r.categoria?.toLowerCase()];
-        return {
-          sbId:     r.id,
-          tipo:     'spesa',
-          data:     r.data,
-          desc:     r.descrizione || '',
-          importo:  parseFloat(r.importo) || 0,
-          idCat:    catObj ? catObj.ID : 1,
-          cat:      r.categoria || '',
-          catNome:  r.categoria || '',
-          catColore: catObj ? catObj.Colore : '#4f8ef7',
-          note:     r.note || ''
-        };
-      }),
-      ...(entrateData || []).map(r => {
-        const catObj = catMapEn[r.categoria?.toLowerCase()];
-        return {
-          sbId:     r.id,
-          tipo:     'entrata',
-          data:     r.data,
-          desc:     r.descrizione || '',
-          importo:  parseFloat(r.importo) || 0,
-          idCat:    catObj ? catObj.ID : 1,
-          cat:      r.categoria || '',
-          catNome:  r.categoria || '',
-          catColore: catObj ? catObj.Colore : '#1ecf96',
-          note:     r.note || ''
-        };
-      })
+    const records = [
+      ...(speseData || []).map(r => ({
+        id:      'sb_sp_' + r.id,
+        sbId:    r.id,
+        tipo:    'sp',
+        data:    r.data,
+        desc:    r.descrizione || '',
+        importo: parseFloat(r.importo) || 0,
+        idCat:   catMapSp[r.categoria?.toLowerCase()] || 1,
+        cat:     r.categoria || '',
+        note:    r.note || ''
+      })),
+      ...(entrateData || []).map(r => ({
+        id:      'sb_en_' + r.id,
+        sbId:    r.id,
+        tipo:    'en',
+        data:    r.data,
+        desc:    r.descrizione || '',
+        importo: parseFloat(r.importo) || 0,
+        idCat:   catMapEn[r.categoria?.toLowerCase()] || 1,
+        cat:     r.categoria || '',
+        note:    r.note || ''
+      }))
     ];
 
-    // Calcola mesi aggregati
-    const monthMap = {};
-    allRecords.forEach(r => {
-      const ym = r.data.slice(0,7);
-      if (!monthMap[ym]) monthMap[ym] = { ym, spese: 0, entrate: 0, saldo: 0 };
-      if (r.tipo === 'spesa')   { monthMap[ym].spese   += r.importo; monthMap[ym].saldo -= r.importo; }
-      if (r.tipo === 'entrata') { monthMap[ym].entrate += r.importo; monthMap[ym].saldo += r.importo; }
-    });
-    const months = Object.values(monthMap).sort((a,b) => a.ym.localeCompare(b.ym));
-
-    // Top categorie (ultime 12 mesi spese)
-    const catTotMap = {};
-    allRecords.filter(r => r.tipo === 'spesa').forEach(r => {
-      if (!catTotMap[r.catNome]) catTotMap[r.catNome] = { nome: r.catNome, colore: r.catColore, totale: 0 };
-      catTotMap[r.catNome].totale += r.importo;
-    });
-    const topCat = Object.values(catTotMap).sort((a,b) => b.totale - a.totale).slice(0, 10);
-
-    // Ultimi 20 record (snapshot recent)
-    const recent = [...allRecords].sort((a,b) => b.data.localeCompare(a.data)).slice(0, 20);
-
-    // Costruisci snapshot sintetico
-    const snap = {
-      exportedAt:  new Date().toISOString(),
-      source:      'supabase',
-      months,
-      topCat,
-      recent,
-      allRecords,
-      cats,
-      modoEntrate: 'corrente'
-    };
-
-    // Salva snapshot e categorie — svuota i record locali
-    localStorage.setItem('budget_mobile_snapshot', JSON.stringify(snap));
+    localStorage.setItem('budget_mobile_records', JSON.stringify(records));
     localStorage.setItem('budget_mobile_cats', JSON.stringify(cats));
-    localStorage.setItem('budget_mobile_records', JSON.stringify([]));
-    localStorage.removeItem('budget_hidden_snap');
 
-    const tot = allRecords.length;
-    if (typeof showToast === 'function') showToast(`✓ ${tot} record sincronizzati da Supabase`, 'success');
+    if (typeof showToast === 'function') showToast(`✓ ${records.length} record sincronizzati`, 'success');
     if (typeof _refreshCurrentPage === 'function') _refreshCurrentPage();
-    if (typeof renderDashboard === 'function') renderDashboard();
     if (typeof updateTopbarCount === 'function') updateTopbarCount();
   } catch(e) {
-    console.error('[sbSyncLoad]', e);
     if (typeof showToast === 'function') showToast('❌ Errore sync: ' + e.message, 'error');
   } finally {
     if (btn) { btn.textContent = '☁ Sync'; btn.disabled = false; }
@@ -555,6 +515,5 @@ async function sbLogoutMobile() {
   if (typeof showToast === 'function') showToast('Disconnesso da Supabase');
 }
 
-
-// Notifica che il layer è pronto (usato da budget-mob.html con defer)
-document.dispatchEvent(new Event('_sbLayerReady'));
+// Notifica che il layer è pronto
+if (typeof document !== 'undefined') document.dispatchEvent(new Event('_sbLayerReady'));
