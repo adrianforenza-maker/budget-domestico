@@ -395,3 +395,113 @@ async function sbInit(onReady) {
     sbShowLoginUI(onReady);
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+//  SUPABASE SYNC — Mobile (budget-mob.html)
+// ══════════════════════════════════════════════════════════════
+
+async function sbSyncLoad() {
+  const btn = document.getElementById('sb-sync-btn');
+  if (btn) { btn.textContent = '⟳ Sync...'; btn.disabled = true; }
+  try {
+    const user = await sbCurrentUser();
+    if (!user) { sbShowLoginUI(() => sbSyncLoad()); return; }
+
+    const [rCats, rCatsEn, speseData, entrateData] = await Promise.all([
+      _sb.from('categorie').select('*').order('nome'),
+      _sb.from('categorie_entrate').select('*').order('nome'),
+      _fetchAll('spese', 'data', false),
+      _fetchAll('entrate', 'data', false)
+    ]);
+
+    const cats = {
+      spese:   (rCats.data   || []).map(r => ({ ID: r.id, Nome: r.nome, Colore: r.colore })),
+      entrate: (rCatsEn.data || []).map(r => ({ ID: r.id, Nome: r.nome, Colore: r.colore }))
+    };
+
+    const catMapSp = {}; cats.spese.forEach(c => { catMapSp[c.Nome?.toLowerCase()] = c.ID; });
+    const catMapEn = {}; cats.entrate.forEach(c => { catMapEn[c.Nome?.toLowerCase()] = c.ID; });
+
+    const records = [
+      ...(speseData || []).map(r => ({
+        id:      'sb_sp_' + r.id,
+        sbId:    r.id,
+        tipo:    'sp',
+        data:    r.data,
+        desc:    r.descrizione || '',
+        importo: parseFloat(r.importo) || 0,
+        idCat:   catMapSp[r.categoria?.toLowerCase()] || 1,
+        cat:     r.categoria || '',
+        note:    r.note || ''
+      })),
+      ...(entrateData || []).map(r => ({
+        id:      'sb_en_' + r.id,
+        sbId:    r.id,
+        tipo:    'en',
+        data:    r.data,
+        desc:    r.descrizione || '',
+        importo: parseFloat(r.importo) || 0,
+        idCat:   catMapEn[r.categoria?.toLowerCase()] || 1,
+        cat:     r.categoria || '',
+        note:    r.note || ''
+      }))
+    ];
+
+    localStorage.setItem('budget_mobile_records', JSON.stringify(records));
+    localStorage.setItem('budget_mobile_cats', JSON.stringify(cats));
+
+    if (typeof showToast === 'function') showToast(`✓ ${records.length} record sincronizzati`, 'success');
+    if (typeof _refreshCurrentPage === 'function') _refreshCurrentPage();
+    if (typeof updateTopbarCount === 'function') updateTopbarCount();
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('❌ Errore sync: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.textContent = '☁ Sync'; btn.disabled = false; }
+  }
+}
+
+async function sbSaveRecord(rec) {
+  try {
+    const user = await sbCurrentUser();
+    if (!user) return false;
+    const cats = typeof getCats === 'function' ? getCats() : { spese: [], entrate: [] };
+    const catList = rec.tipo === 'sp' ? cats.spese : cats.entrate;
+    const catObj = catList.find(c => c.ID === rec.idCat);
+    const categoria = catObj ? catObj.Nome : (rec.cat || '');
+    const table = rec.tipo === 'sp' ? 'spese' : 'entrate';
+    const row = { data: rec.data, descrizione: rec.desc || '', importo: rec.importo, categoria, note: rec.note || '', user_id: user.id };
+    const { data, error } = await _sb.from(table).insert(row).select().single();
+    if (error) throw error;
+    rec.id   = 'sb_' + rec.tipo + '_' + data.id;
+    rec.sbId = data.id;
+    return true;
+  } catch(e) {
+    console.error('[sbSaveRecord]', e.message);
+    return false;
+  }
+}
+
+async function sbDeleteRecord(rec) {
+  try {
+    if (!rec.sbId) return false;
+    const user = await sbCurrentUser();
+    if (!user) return false;
+    const table = rec.tipo === 'sp' ? 'spese' : 'entrate';
+    const { error } = await _sb.from(table).delete().eq('id', rec.sbId);
+    if (error) throw error;
+    return true;
+  } catch(e) {
+    console.error('[sbDeleteRecord]', e.message);
+    return false;
+  }
+}
+
+async function sbSyncNow() {
+  await sbSyncLoad();
+}
+
+async function sbLogoutMobile() {
+  if (!confirm('Disconnettersi da Budget Domestico?')) return;
+  await sbSignOut();
+  if (typeof showToast === 'function') showToast('Disconnesso da Supabase');
+}
