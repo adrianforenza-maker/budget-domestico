@@ -41,6 +41,26 @@ async function sbIsLoggedIn() {
   return !!user;
 }
 
+// ── Fetch tutti i record con paginazione (supera limite 1000) ────
+async function _fetchAll(table, orderCol, ascending = false) {
+  const PAGE = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await _sb
+      .from(table)
+      .select('*')
+      .order(orderCol, { ascending })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
 // ── Normalizzazione dati Supabase → formato interno app ─────────
 // Interno desktop:  { ID, MdbID, Data, Descrizione, Importo, IDCategoria, Categoria, Note }
 // Interno mobile:   { id, tipo, data, desc, importo, idCat, note }
@@ -107,17 +127,18 @@ window.budgetAPI = {
       const user = await sbCurrentUser();
       if (!user) return { success: false, error: 'not_authenticated', needsLogin: true };
 
-      const [rCats, rCatsEn, rSpese, rEntrate] = await Promise.all([
+      const [rCats, rCatsEn, speseData, entrateData] = await Promise.all([
         _sb.from('categorie').select('*').order('nome'),
         _sb.from('categorie_entrate').select('*').order('nome'),
-        _sb.from('spese').select('*').order('data', { ascending: false }),
-        _sb.from('entrate').select('*').order('data', { ascending: false })
+        _fetchAll('spese', 'data', false),
+        _fetchAll('entrate', 'data', false)
       ]);
 
       if (rCats.error)    throw rCats.error;
       if (rCatsEn.error)  throw rCatsEn.error;
-      if (rSpese.error)   throw rSpese.error;
-      if (rEntrate.error) throw rEntrate.error;
+
+      const rSpese   = { data: speseData };
+      const rEntrate = { data: entrateData };
 
       const categorie        = _normCats(rCats.data,   COLORS);
       const categorieEntrate = _normCats(rCatsEn.data, COLORS_EN);
