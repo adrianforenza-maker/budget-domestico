@@ -50,9 +50,9 @@ async function _fetchAll(table, orderCol, ascending = false, fromDate = null) {
     let query = _sb
       .from(table)
       .select('*')
-      .order(orderCol, { ascending })
-      .range(from, from + PAGE - 1);
+      .order(orderCol, { ascending });
     if (fromDate) query = query.gte('data', fromDate);
+    query = query.range(from, from + PAGE - 1);
     const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
