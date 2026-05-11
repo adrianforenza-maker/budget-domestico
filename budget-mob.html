@@ -1160,32 +1160,79 @@ async function driveAutoSync() {
 const EXP_KEY   = 'budget_mobile_exported';
 const QUICK_KEY = 'budget_mobile_quick';
 
-function getRecords() {
-  try { return JSON.parse(localStorage.getItem(DB_KEY)||'[]'); } catch(e) { return []; }
-}
-function saveRecords(r) { localStorage.setItem(DB_KEY, JSON.stringify(r)); }
+// ══════════════════════════════════════════
+//  STATE GLOBALE CLOUD-FIRST
+//  Tutti i dati vivono in memoria, fonte = Supabase
+// ══════════════════════════════════════════
+const _DB = {
+  spese:    [],   // { sbId, tipo:'spesa', data, desc, importo, idCat, cat, catNome, catColore, note }
+  entrate:  [],   // { sbId, tipo:'entrata', ... }
+  categorie: { spese: [], entrate: [] }  // { ID, Nome, Colore }
+};
+let _dbLoaded = false;
 
-function getCats() {
+// Compatibilità con codice legacy che usa getRecords/getCats
+function getRecords() {
+  return [
+    ..._DB.spese.map(r => ({...r, tipo:'sp', id:'sb_sp_'+r.sbId})),
+    ..._DB.entrate.map(r => ({...r, tipo:'en', id:'sb_en_'+r.sbId}))
+  ];
+}
+function getCats() { return _DB.categorie; }
+
+// Carica tutti i dati da Supabase in _DB
+async function loadData() {
   try {
-    const c = JSON.parse(localStorage.getItem(CAT_KEY)||'null');
-    if (c) return c;
-  } catch(e) {}
-  // Categorie di default (compatibili con Access)
-  return {
-    spese: [
-      {ID:1,Nome:'Cibo',Colore:'#1ecf96'},
-      {ID:2,Nome:'Trasporti',Colore:'#4f8ef7'},
-      {ID:3,Nome:'Casa',Colore:'#f5a124'},
-      {ID:4,Nome:'Salute',Colore:'#f0566a'},
-      {ID:5,Nome:'Svago',Colore:'#7c5cf6'},
-      {ID:6,Nome:'Altro',Colore:'#9aa3c2'}
-    ],
-    entrate: [
-      {ID:1,Nome:'Stipendio',Colore:'#1ecf96'},
-      {ID:2,Nome:'Bonus',Colore:'#f5a124'},
-      {ID:3,Nome:'Altro',Colore:'#9aa3c2'}
-    ]
-  };
+    const user = await sbCurrentUser();
+    if (!user) { sbShowLoginUI(loadData); return; }
+
+    const [rCats, rCatsEn, speseData, entrateData] = await Promise.all([
+      _sb.from('categorie').select('*').order('nome'),
+      _sb.from('categorie_entrate').select('*').order('nome'),
+      _fetchAll('spese', 'data', false),
+      _fetchAll('entrate', 'data', false)
+    ]);
+
+    _DB.categorie.spese   = (rCats.data   || []).map(r => ({ ID: r.id, Nome: r.nome, Colore: r.colore }));
+    _DB.categorie.entrate = (rCatsEn.data || []).map(r => ({ ID: r.id, Nome: r.nome, Colore: r.colore }));
+
+    const catMapSp = {}; _DB.categorie.spese.forEach(c => { catMapSp[c.Nome?.toLowerCase()] = c; });
+    const catMapEn = {}; _DB.categorie.entrate.forEach(c => { catMapEn[c.Nome?.toLowerCase()] = c; });
+
+    _DB.spese = (speseData || []).map(r => {
+      const cat = catMapSp[r.categoria?.toLowerCase()] || { ID: 1, Nome: r.categoria||'', Colore: '#9aa3c2' };
+      return { sbId: r.id, tipo: 'spesa', data: r.data, desc: r.descrizione||'', importo: parseFloat(r.importo)||0,
+               idCat: cat.ID, cat: r.categoria||'', catNome: cat.Nome, catColore: cat.Colore, note: r.note||'' };
+    });
+
+    _DB.entrate = (entrateData || []).map(r => {
+      const cat = catMapEn[r.categoria?.toLowerCase()] || { ID: 1, Nome: r.categoria||'', Colore: '#1ecf96' };
+      return { sbId: r.id, tipo: 'entrata', data: r.data, desc: r.descrizione||'', importo: parseFloat(r.importo)||0,
+               idCat: cat.ID, cat: r.categoria||'', catNome: cat.Nome, catColore: cat.Colore, note: r.note||'' };
+    });
+
+    _dbLoaded = true;
+    // Salva anche in localStorage per compatibilità con funzioni legacy (export CSV ecc.)
+    localStorage.setItem(CAT_KEY, JSON.stringify(_DB.categorie));
+    return true;
+  } catch(e) {
+    console.error('[loadData]', e);
+    showToast('❌ Errore caricamento: ' + e.message, 'error');
+    return false;
+  }
+}
+
+// Tutti i record di un mese specifico
+function _recordsOfMonth(ym) {
+  return [
+    ..._DB.spese.filter(r => r.data.startsWith(ym)),
+    ..._DB.entrate.filter(r => r.data.startsWith(ym))
+  ].sort((a,b) => b.data.localeCompare(a.data));
+}
+
+// Tutti i record ordinati per data
+function _allRecords() {
+  return [..._DB.spese, ..._DB.entrate].sort((a,b) => b.data.localeCompare(a.data));
 }
 
 // ══════════════════════════════════════════
@@ -1231,145 +1278,47 @@ function showPage(page) {
 //  BILANCIO (da snapshot PC)
 // ══════════════════════════════════════════
 function renderBilancio() {
-  const snap = getSnapshot();
+  if (!_dbLoaded) return;
   const el   = document.getElementById('bilancio-content');
-  if (!snap) {
-    el.innerHTML = `
-      <div class="export-card" style="background:linear-gradient(135deg,rgba(79,142,247,.12),rgba(30,207,150,.08));border-color:rgba(79,142,247,.3)">
-        <div style="font-size:16px;font-weight:700;margin-bottom:6px">💰 Bilancio PC</div>
-        <div style="font-size:13px;color:var(--t2);line-height:1.5">Carica uno snapshot dal PC per vedere il bilancio completo.</div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="driveLoadSnapshot()" style="flex:1">☁ Sync da Drive</button>
-        <button class="btn" onclick="document.getElementById('snapshot-input-bil').click()" style="flex:1;background:var(--bg3);color:var(--t2);border:1px solid var(--b2)">📂 Da file</button>
-      </div>
-      <input type="file" id="snapshot-input-bil" accept=".json" style="display:none" onchange="loadSnapshot(event)">`;
+  const mesi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  let modo   = localStorage.getItem('bilModoEntrate') || 'corrente';
+
+  // Calcola mesi aggregati da _DB
+  const monthMap = {};
+  [..._DB.spese, ..._DB.entrate].forEach(r => {
+    const ym = r.data.slice(0,7);
+    if (!monthMap[ym]) monthMap[ym] = { ym, spese: 0, entrate: 0 };
+    if (r.tipo === 'spesa')   monthMap[ym].spese   += r.importo;
+    if (r.tipo === 'entrata') monthMap[ym].entrate += r.importo;
+  });
+  const months = Object.values(monthMap)
+    .map(m => ({ ...m, saldo: m.entrate - m.spese }))
+    .sort((a,b) => a.ym.localeCompare(b.ym));
+
+  if (!months.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Nessun dato disponibile</div></div>';
     return;
   }
 
-  const mesi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
-  let modo   = localStorage.getItem('bilModoEntrate') || snap.modoEntrate || 'prec';
-
-  // ── Fondi snapshot + record locali ──────────────────────────
-  // Sottrai hidden_snap dai months: record nascosti su mobile ma ancora nello snapshot
-  // Usa i months direttamente (sempre completi) invece di snap.recent (solo 30 record)
-  const hiddenSnapBil = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  // Clona tutti i mesi prima di modificarli
-  const months = snap.months.map(m => ({...m}));
-  // Applica hidden_snap: spese → sottrai da spese del mese; entrate → sottrai da entrate
-  // del mese del record E da entratePrec del mese successivo (per modalità "Mese Prec.")
-  hiddenSnapBil.forEach(key => {
-    const parts = key.split('|');
-    const recYm = (parts[0]||'').slice(0,7);
-    const imp   = parseFloat(parts[2]||0) || 0;
-    const tipo  = parts[3] || 'spesa';
-    if (!recYm || imp <= 0) return;
-    if (tipo === 'spesa') {
-      const m = months.find(x => x.ym === recYm);
-      if (!m) return;
-      m.spese  = Math.max(0, (m.spese||0) - imp);
-      m.saldo  = (m.entrate||0) - m.spese;
-      if (m.saldoBil != null) m.saldoBil = (m.entratePrec ?? m.entrate) - m.spese;
-    } else {
-      // Sottrai da entrate del mese del record (modalità "Stesso Mese")
-      const m = months.find(x => x.ym === recYm);
-      if (m) {
-        m.entrate = Math.max(0, (m.entrate||0) - imp);
-        m.saldo   = m.entrate - (m.spese||0);
-        // saldoBil in modo "stesso mese" coincide con saldo — non va toccato separatamente
-        // in modo "mese prec." usa entratePrec (non cambiata) → già corretto senza intervento
-      }
-      // Sottrai da entratePrec del mese successivo (modalità "Mese Prec.")
-      const [y, mo] = recYm.split('-').map(Number);
-      const nextDate = new Date(y, mo, 1); // mo è 1-based → new Date(y, mo) = mese successivo
-      const nextYm = nextDate.getFullYear() + '-' + String(nextDate.getMonth()+1).padStart(2,'0');
-      const mNext = months.find(x => x.ym === nextYm);
-      if (mNext && mNext.entratePrec != null) {
-        mNext.entratePrec = Math.max(0, (mNext.entratePrec||0) - imp);
-        if (mNext.saldoBil != null) mNext.saldoBil = mNext.entratePrec - (mNext.spese||0);
-      }
-    }
-  });
-
-  const localRecords = getRecords();
-  // Chiavi snap per deduplicazione
-  const snapAllKeys = new Set((snap.recent||[]).map(r=>`${r.data}|${r.desc}|${r.importo}`));
-
-  if (localRecords.length) {
-    localRecords
-      .filter(r => !snapAllKeys.has(`${r.data}|${r.desc||''}|${r.importo}`))
-      .forEach(r => {
-        const ymR = r.data.slice(0,7);
-        let mObj  = months.find(m => m.ym === ymR);
-        if (!mObj) {
-          mObj = { ym: ymR, entrate: 0, spese: 0, saldo: 0,
-                   entratePrec: null, saldoBil: null, ymPrec: null };
-          months.push(mObj);
-          months.sort((a,b) => a.ym.localeCompare(b.ym));
-        }
-        if (r.tipo === 'sp') {
-          mObj.spese   += r.importo;
-          mObj.saldo    = mObj.entrate - mObj.spese;
-          if (mObj.saldoBil !== null) mObj.saldoBil = (mObj.entratePrec ?? mObj.entrate) - mObj.spese;
-        } else {
-          mObj.entrate += r.importo;
-          mObj.saldo    = mObj.entrate - mObj.spese;
-        }
-      });
-  }
-
-  const last6        = months.slice(-6);
   const annoCorrente = new Date().getFullYear().toString();
   const mesiAnno     = months.filter(m => m.ym.startsWith(annoCorrente));
-  const ytdEntrate   = mesiAnno.reduce((s,m) => s + (modo === 'prec' ? (m.entratePrec ?? m.entrate) : m.entrate), 0);
-  const ytdSpese     = mesiAnno.reduce((s,m) => s + m.spese,   0);
-  const ytdSaldoCorr = mesiAnno.reduce((s,m) => s + m.saldo,   0);
-  const ytdSaldoBil  = mesiAnno.reduce((s,m) => s + (m.saldoBil ?? m.saldo), 0);
-  const ytdSaldo     = modo === 'prec' ? ytdSaldoBil : ytdSaldoCorr;
+  const ytdEntrate   = mesiAnno.reduce((s,m) => s + m.entrate, 0);
+  const ytdSpese     = mesiAnno.reduce((s,m) => s + m.spese, 0);
+  const ytdSaldo     = mesiAnno.reduce((s,m) => s + m.saldo, 0);
 
-  const expDate = new Date(snap.exportedAt).toLocaleDateString('it-IT',
-    {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-
-  const nowYM      = today().slice(0,7);
-  const localThisM = localRecords.filter(r => r.data.startsWith(nowYM));
-  const localBadge = localThisM.length
-    ? `<span style="background:rgba(245,161,36,.2);color:var(--amber);border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;margin-left:6px">+${localThisM.length} mobile</span>`
-    : '';
-
-  const getSaldo = m => modo === 'prec' ? (m.saldoBil ?? m.saldo) : m.saldo;
-  const getEn    = m => modo === 'prec' ? (m.entratePrec ?? m.entrate) : m.entrate;
-  const getEnLbl = m => {
-    if (modo !== 'prec') return mesi[parseInt(m.ym.split('-')[1])-1];
-    if (m.ymPrec) return mesi[parseInt(m.ymPrec.split('-')[1])-1] + ' ' + m.ymPrec.split('-')[0];
-    return 'Prec.';
-  };
-
-  const toggleHtml = `
-    <div style="display:flex;gap:0;border:1px solid rgba(255,255,255,.15);border-radius:8px;overflow:hidden;margin-bottom:14px;font-size:12px;font-weight:700">
-      <button onclick="setBilModo('prec')"
-        style="flex:1;padding:8px;border:none;cursor:pointer;transition:all .15s;background:${modo==='prec'?'var(--accent)':'transparent'};color:${modo==='prec'?'#fff':'var(--t3)'}">
-        📅 Mese Prec.
-      </button>
-      <button onclick="setBilModo('corrente')"
-        style="flex:1;padding:8px;border:none;cursor:pointer;transition:all .15s;background:${modo==='corrente'?'var(--green)':'transparent'};color:${modo==='corrente'?'#fff':'var(--t3)'}">
-        📆 Stesso Mese
-      </button>
-    </div>`;
-
-  const maxVal = Math.max(...last6.map(m => Math.max(getEn(m), m.spese)), 1);
+  const last6  = months.slice(-6);
+  const maxVal = Math.max(...last6.map(m => Math.max(m.entrate, m.spese)), 1);
   const bars   = last6.map(m => {
     const [y,mo] = m.ym.split('-');
     const label  = mesi[parseInt(mo)-1];
     const hSp    = Math.round((m.spese/maxVal)*60);
-    const hEn    = Math.round((getEn(m)/maxVal)*60);
-    const sal    = getSaldo(m);
-    const sColor = sal >= 0 ? 'var(--green)' : 'var(--red)';
-    const sVal   = Math.abs(sal) >= 1000
-      ? (sal<0?'-':'')+(Math.abs(sal)/1000).toFixed(1)+'k'
-      : Math.round(sal);
-    const hasLocal = localRecords.some(r => r.data.startsWith(m.ym));
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;${hasLocal?'outline:2px solid var(--amber);border-radius:4px;':''}">
-      <div style="font-size:9px;color:${hasLocal?'var(--amber)':'var(--t3)'};font-weight:700">${label}</div>
+    const hEn    = Math.round((m.entrate/maxVal)*60);
+    const sColor = m.saldo >= 0 ? 'var(--green)' : 'var(--red)';
+    const sVal   = Math.abs(m.saldo) >= 1000
+      ? (m.saldo<0?'-':'')+(Math.abs(m.saldo)/1000).toFixed(1)+'k'
+      : Math.round(m.saldo);
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="font-size:9px;color:var(--t3);font-weight:700">${label}</div>
       <div style="display:flex;gap:2px;align-items:flex-end;height:64px">
         <div style="width:10px;height:${hEn}px;background:var(--green);border-radius:3px 3px 0 0;opacity:.85"></div>
         <div style="width:10px;height:${hSp}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.85"></div>
@@ -1378,21 +1327,16 @@ function renderBilancio() {
     </div>`;
   }).join('');
 
-  const lastM     = months.at(-1);
-  const lastSal   = getSaldo(lastM);
-  const lastEn    = getEn(lastM);
-  const lastEnLbl = getEnLbl(lastM);
-  const bilCol    = lastSal >= 0 ? 'var(--green)' : 'var(--red)';
+  const lastM  = months.at(-1);
+  const bilCol = lastM.saldo >= 0 ? 'var(--green)' : 'var(--red)';
 
-  const cats = getCats();
-  const topCatMap = {};
-  (snap.topCat||[]).forEach(c => { topCatMap[c.nome] = {...c}; });
-  localThisM.filter(r=>r.tipo==='sp').forEach(r => {
-    const cat = cats.spese.find(c=>c.ID===r.idCat) || {Nome:'Altro', Colore:'#9aa3c2'};
-    if (topCatMap[cat.Nome]) topCatMap[cat.Nome].totale += r.importo;
-    else topCatMap[cat.Nome] = {nome:cat.Nome, colore:cat.Colore, totale:r.importo};
+  // Top categorie (tutte le spese)
+  const catTotMap = {};
+  _DB.spese.forEach(r => {
+    if (!catTotMap[r.catNome]) catTotMap[r.catNome] = { nome: r.catNome, colore: r.catColore, totale: 0 };
+    catTotMap[r.catNome].totale += r.importo;
   });
-  const topCatSorted = Object.values(topCatMap).sort((a,b)=>b.totale-a.totale);
+  const topCatSorted = Object.values(catTotMap).sort((a,b) => b.totale-a.totale).slice(0,10);
   const topCatHtml   = topCatSorted.map(c => {
     const pct = lastM.spese > 0 ? Math.round(c.totale/lastM.spese*100) : 0;
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
@@ -1406,20 +1350,15 @@ function renderBilancio() {
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div>
-        <div style="font-size:11px;color:var(--t3)">Snapshot PC</div>
-        <div style="font-size:12px;font-weight:600">${expDate}</div>
+        <div style="font-size:11px;color:var(--t3)">☁ Supabase</div>
+        <div style="font-size:12px;font-weight:600">${_DB.spese.length + _DB.entrate.length} record totali</div>
       </div>
       <button class="btn" style="padding:7px 12px;font-size:11px;background:var(--bg3);color:var(--accent);border:1px solid var(--accent);width:auto"
-        onclick="document.getElementById('snapshot-input-bil2').click()">🔄 Aggiorna</button>
-      <input type="file" id="snapshot-input-bil2" accept=".json" style="display:none" onchange="loadSnapshot(event)">
+        onclick="loadData().then(renderBilancio)">🔄 Aggiorna</button>
     </div>
 
-    ${toggleHtml}
-
     <div class="card" style="margin-bottom:12px">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">
-        ANNO ${annoCorrente} — RIEPILOGO${localBadge}
-      </div>
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">ANNO ${annoCorrente} — RIEPILOGO</div>
       <div style="display:flex;gap:8px">
         <div style="flex:1;text-align:center">
           <div style="font-size:10px;color:var(--t3)">Entrate</div>
@@ -1440,21 +1379,20 @@ function renderBilancio() {
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">ULTIMI 6 MESI</div>
       <div style="display:flex;gap:4px;align-items:flex-end">${bars}</div>
-      <div style="display:flex;gap:8px;margin-top:8px;justify-content:center;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--green);border-radius:2px"></div>${modo==='prec'?'Entr. rif.':'Entrate'}</div>
+      <div style="display:flex;gap:8px;margin-top:8px;justify-content:center">
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--green);border-radius:2px"></div>Entrate</div>
         <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--red);border-radius:2px"></div>Uscite</div>
-        ${localRecords.length?'<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--amber)">⬤ dati mobile</div>':''}
       </div>
     </div>
 
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:8px">
-        MESE CORRENTE — ${mesi[parseInt(lastM.ym.split('-')[1])-1]} ${lastM.ym.split('-')[0]}${localBadge}
+        MESE CORRENTE — ${mesi[parseInt(lastM.ym.split('-')[1])-1]} ${lastM.ym.split('-')[0]}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--t3)">Entr. rif. (${lastEnLbl})</div>
-          <div style="font-size:15px;font-weight:800;color:var(--green)">€ ${eur(lastEn)}</div>
+          <div style="font-size:10px;color:var(--t3)">Entrate</div>
+          <div style="font-size:15px;font-weight:800;color:var(--green)">€ ${eur(lastM.entrate)}</div>
         </div>
         <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--t3)">Uscite</div>
@@ -1463,18 +1401,16 @@ function renderBilancio() {
       </div>
       <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
         <div style="font-size:10px;color:var(--t3);margin-bottom:2px">BILANCIO</div>
-        <div style="font-size:22px;font-weight:800;color:${bilCol}">${lastSal<0?'-':''}€ ${eur(Math.abs(lastSal))}</div>
+        <div style="font-size:22px;font-weight:800;color:${bilCol}">${lastM.saldo<0?'-':''}€ ${eur(Math.abs(lastM.saldo))}</div>
       </div>
     </div>
 
     ${topCatSorted.length ? `
     <div class="card">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE — MESE CORRENTE</div>
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE — TOTALE</div>
       ${topCatHtml}
     </div>` : ''}`;
 }
-
-
 
 function setBilModo(modo) {
   localStorage.setItem('bilModoEntrate', modo);
@@ -1504,9 +1440,53 @@ function changeMonthSt(dir) {
 }
 
 function renderDashboard() {
-  const snap         = getSnapshot();
-  const localRecords = getRecords();
-  const cats         = getCats();
+  if (!_dbLoaded) { return; }
+
+  const spMese   = _DB.spese.filter(r => r.data.startsWith(currentMonth));
+  const enMese   = _DB.entrate.filter(r => r.data.startsWith(currentMonth));
+  const totSp    = spMese.reduce((s,r) => s+r.importo, 0);
+  const totEn    = enMese.reduce((s,r) => s+r.importo, 0);
+  const saldo    = totEn - totSp;
+  const pct      = totEn > 0 ? Math.min(100, (saldo/totEn)*100) : 0;
+
+  document.getElementById('month-label').textContent = fmtMonth(currentMonth);
+  document.getElementById('kpi-en').textContent  = '€ ' + eur(totEn);
+  document.getElementById('kpi-sp').textContent  = '€ ' + eur(totSp);
+  const sEl = document.getElementById('kpi-saldo');
+  sEl.textContent = (saldo<0?'-':'') + '€ ' + eur(Math.abs(saldo));
+  sEl.style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('kpi-bar').style.width      = Math.max(0,pct) + '%';
+  document.getElementById('kpi-bar').style.background = pct >= 20 ? 'var(--green)' : pct >= 0 ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('kpi-pct').textContent      = pct.toFixed(1) + '% di risparmio';
+
+  // Transazioni recenti del mese
+  const el  = document.getElementById('recent-list');
+  const allTx = _recordsOfMonth(currentMonth).slice(0, 30);
+
+  if (!allTx.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>';
+  } else {
+    el.innerHTML = allTx.map(r => {
+      const sign = r.tipo==='spesa' ? '-' : '+';
+      const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
+      return `<div class="tx-item" onclick="toggleDel(this)">
+        <div class="tx-dot" style="background:${r.catColore||'#9aa3c2'}"></div>
+        <div class="tx-info">
+          <div class="tx-desc">${r.desc||'—'}</div>
+          <div class="tx-meta"><span class="badge" style="background:${r.catColore||'#9aa3c2'}22;color:${r.catColore||'#9aa3c2'}">${r.catNome||'—'}</span> · ${fmtDate(r.data)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="tx-amount" style="color:${col}">${sign} € ${eur(r.importo)}</div>
+          <button class="tx-delete-btn" onclick="deleteRecord(event,${r.sbId},'${r.tipo}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Topbar
+  const total = _DB.spese.length + _DB.entrate.length;
+  document.getElementById('topbar-sub').textContent = `${total} record · ☁ Supabase`;
+}
 
   // ── Somma snap + record locali per il mese visualizzato ──
   let totEn = 0, totSp = 0;
@@ -1643,79 +1623,58 @@ function renderDashboard() {
     }).join('');
   }
 
-  // ── Topbar ──
-  const snapBadge  = snap ? ` · 📊 PC ${new Date(snap.exportedAt).toLocaleDateString('it-IT')}` : '';
-  const localCount = localRecords.length;
-  const snapCount  = snap ? (snap.recent||[]).length : 0;
-  const total      = snapCount + localCount;
-  document.getElementById('topbar-sub').textContent = total + ' record' + snapBadge +
-    (localCount ? ` +${localCount}📱` : '');
-}
+
 
 function toggleDel(el) {
   document.querySelectorAll('.tx-item.show-del').forEach(e => { if(e!==el) e.classList.remove('show-del'); });
   el.classList.toggle('show-del');
 }
 
-// Aggiorna visivamente la pagina corrente dopo modifica dati
 function _refreshCurrentPage() {
   renderDashboard();
-  if (currentPage === 'storico')   renderStorico();
-  if (currentPage === 'bilancio')  renderBilancio();
-  if (currentPage === 'spese-rapide') renderQuick();
+  if (currentPage === 'storico')  renderStorico();
+  if (currentPage === 'bilancio') renderBilancio();
 }
 
 function deleteSnapRecordByKey(e, snapKey) {
-  e.stopPropagation();
-  // snapKey arriva già normalizzata (desc non encoded) dalla costruzione nello storico
-  if (!snapKey) { showToast('⚠ Chiave record non valida'); return; }
-  if (!confirm('Nascondere questa transazione?\n(non modifica i dati sul PC)')) return;
-  const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  if (!hidden.includes(snapKey)) {
-    hidden.push(snapKey);
-    localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden));
-  }
-  // Estrai dati dalla chiave per il log cancellazioni
-  const parts = snapKey.split('|');
-  const DKEY = 'budget_deleted_log';
-  const log  = JSON.parse(localStorage.getItem(DKEY)||'[]');
-  // Normalizza tipo: lo snapshot usa 'spesa'/'entrata', il log usa 'sp'/'en'
-  const tipoLog = (parts[3]||'spesa') === 'entrata' ? 'en' : 'sp';
-  const deletedAt = new Date().toISOString();
-  log.push({ tipo:tipoLog, data:parts[0]||'', desc:parts[1]||'',
-             importo:parseFloat(parts[2]||0), idCat:null, note:'', deletedAt });
-  localStorage.setItem(DKEY, JSON.stringify(log));
-  showToast('✓ Nascosto — incluso nel prossimo sync Drive');
-  _refreshCurrentPage();
-  if (typeof renderBilancio === 'function') renderBilancio();
+  // Non più usata — mantenuta per compatibilità
+  deleteRecord(e, snapKey, 'snap');
 }
 
-function deleteRecord(e, localId, snapKey) {
+async function deleteRecord(e, sbIdOrKey, tipo) {
   e.stopPropagation();
-  const DKEY = 'budget_deleted_log';
-  if (localId) {
-    const recLocal = getRecords().find(r => r.id === localId);
-    if (recLocal) {
-      const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
-      log.push({ tipo:recLocal.tipo, data:recLocal.data, desc:recLocal.desc||'', importo:recLocal.importo,
-                 idCat:recLocal.idCat, note:recLocal.note||'', deletedAt:new Date().toISOString(), isLocal:true });
-      localStorage.setItem(DKEY, JSON.stringify(log));
-      sbDeleteRecord(recLocal); // cancella anche da Supabase
+  if (!confirm('Eliminare questo record?')) return;
+
+  let sbId = sbIdOrKey;
+  let tipoRecord = tipo;
+
+  // Se chiamata dal vecchio codice con localId tipo 'sb_sp_123'
+  if (typeof sbIdOrKey === 'string' && sbIdOrKey.startsWith('sb_')) {
+    const parts = sbIdOrKey.split('_');
+    tipoRecord = parts[1] === 'sp' ? 'spesa' : 'entrata';
+    sbId = parseInt(parts[2]);
+  }
+
+  const table = tipoRecord === 'spesa' ? 'spese' : 'entrate';
+  const arr   = tipoRecord === 'spesa' ? _DB.spese : _DB.entrate;
+
+  try {
+    const user = await sbCurrentUser();
+    if (!user) { showToast('❌ Non autenticato'); return; }
+    const { error } = await _sb.from(table).delete().eq('id', sbId);
+    if (error) throw error;
+
+    // Rimuovi da _DB in memoria
+    if (tipoRecord === 'spesa') {
+      _DB.spese = _DB.spese.filter(r => r.sbId !== sbId);
+    } else {
+      _DB.entrate = _DB.entrate.filter(r => r.sbId !== sbId);
     }
-    saveRecords(getRecords().filter(r => r.id !== localId));
+
     showToast('✓ Record eliminato');
     _refreshCurrentPage();
-  } else if (snapKey) {
-    if (!confirm('Nascondere questa transazione?\n(verrà inclusa come cancellazione nel prossimo CSV)')) return;
-    const hidden = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-    if (!hidden.includes(snapKey)) { hidden.push(snapKey); localStorage.setItem('budget_hidden_snap', JSON.stringify(hidden)); }
-    const parts = snapKey.split('|');
-    const log = JSON.parse(localStorage.getItem(DKEY)||'[]');
-    log.push({ tipo:'sp', data:parts[0]||'', desc:parts[1]||'', importo:parseFloat(parts[2])||0,
-               idCat:null, note:'', deletedAt:new Date().toISOString() });
-    localStorage.setItem(DKEY, JSON.stringify(log));
-    showToast('✓ Nascosto — incluso nel prossimo export CSV');
-    _refreshCurrentPage();
+  } catch(err) {
+    showToast('❌ Errore eliminazione: ' + err.message, 'error');
   }
 }
 
@@ -1724,87 +1683,58 @@ function deleteRecord(e, localId, snapKey) {
 // ══════════════════════════════════════════
 function renderStorico() {
   document.getElementById('month-label-st').textContent = fmtMonth(currentMonthSt);
-  const records = getRecords().filter(r => ym(r.data) === currentMonthSt);
-  const cats = getCats();
   const el = document.getElementById('storico-list');
+  const recs = _recordsOfMonth(currentMonthSt);
 
-  // Cancellazioni pendenti (non ancora inviate su Drive) del mese corrente
-  const deletedLog = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
-  const pendingDel = deletedLog.filter(d => d.data && ym(d.data) === currentMonthSt);
-
-  if (!records.length && !pendingDel.length) {
+  if (!recs.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione</div></div>';
     return;
   }
 
-  const sorted = [...records].sort((a,b) => b.data.localeCompare(a.data));
-
-  const recordsHtml = sorted.map(r => {
-    const arr = r.tipo==='sp' ? cats.spese : cats.entrate;
-    const cat = arr.find(c=>c.ID===r.idCat) || {Nome:'—',Colore:'#9aa3c2'};
-    const sign = r.tipo==='sp' ? '-' : '+';
-    const col  = r.tipo==='sp' ? 'var(--red)' : 'var(--green)';
-    return `<div class="tx-item" style="margin-bottom:8px" onclick="toggleDel(this)" data-id="${r.id}">
-      <div class="tx-dot" style="background:${cat.Colore}"></div>
+  el.innerHTML = recs.map(r => {
+    const sign = r.tipo==='spesa' ? '-' : '+';
+    const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
+    return `<div class="tx-item" style="margin-bottom:8px" onclick="toggleDel(this)">
+      <div class="tx-dot" style="background:${r.catColore||'#9aa3c2'}"></div>
       <div class="tx-info">
-        <div class="tx-desc">${r.desc || '—'}</div>
-        <div class="tx-meta"><span class="badge" style="background:${cat.Colore}22;color:${cat.Colore}">${cat.Nome}</span> · ${fmtDate(r.data)}${r.note?' · '+r.note:''}</div>
+        <div class="tx-desc">${r.desc||'—'}</div>
+        <div class="tx-meta"><span class="badge" style="background:${r.catColore||'#9aa3c2'}22;color:${r.catColore||'#9aa3c2'}">${r.catNome||'—'}</span> · ${fmtDate(r.data)}${r.note?' · '+r.note:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <div class="tx-amount" style="color:${col}">${sign} € ${eur(r.importo)}</div>
-        <button class="tx-delete-btn" onclick="deleteRecord(event,'${r.id}')">✕</button>
+        <button class="tx-delete-btn" onclick="editRecord(event,${r.sbId},'${r.tipo}')" style="background:rgba(79,142,247,.15);border-color:rgba(79,142,247,.4);color:var(--accent);font-size:11px">✎</button>
+        <button class="tx-delete-btn" onclick="deleteRecord(event,${r.sbId},'${r.tipo}')">✕</button>
       </div>
     </div>`;
   }).join('');
-
-  // Cancellazioni pendenti con badge 🗑 e pulsante ↩ Annulla
-  // Solo record snapshot (non locali) nel pending sync
-  const pendingSync = pendingDel.filter(d => !d.isLocal);
-  const pendingHtml = pendingSync.length ? `
-    <div style="margin-top:12px;padding:8px 12px;background:rgba(240,86,106,.06);border-radius:10px;border:1px solid rgba(240,86,106,.2)">
-      <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px;letter-spacing:.5px">🗑 IN ATTESA DI SYNC (${pendingSync.length})</div>
-      ${pendingSync.map((d, idx) => {
-        const isEn = d.tipo === 'en' || d.tipo === 'entrata';
-        const col  = isEn ? 'var(--green)' : 'var(--red)';
-        const sign = isEn ? '+' : '-';
-        return `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(240,86,106,.1)">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--t2);text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.desc||'—'}</div>
-            <div style="font-size:11px;color:${col}">${fmtDate(d.data)} · ${sign} € ${eur(d.importo||0)}</div>
-          </div>
-          <button onclick="revertDeletion('${d.deletedAt}')" style="margin-left:10px;background:rgba(30,207,150,.15);border:1px solid rgba(30,207,150,.4);color:var(--green);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap">↩ Annulla</button>
-        </div>`;
-      }).join('')}
-    </div>` : '';
-
-  el.innerHTML = recordsHtml + pendingHtml;
 }
 
-// Annulla una cancellazione pendente (prima che venga inviata su Drive)
-function revertDeletion(deletedAt) {
-  const log = JSON.parse(localStorage.getItem('budget_deleted_log')||'[]');
-  // Cerca per deletedAt (ID univoco) — più robusto dell'indice numerico
-  const entry = log.find(d => d.deletedAt === deletedAt);
-  if (!entry) return;
+// ══════════════════════════════════════════
+//  MODIFICA RECORD (nuova funzione)
+// ══════════════════════════════════════════
+function editRecord(e, sbId, tipo) {
+  e.stopPropagation();
+  const arr = tipo === 'spesa' ? _DB.spese : _DB.entrate;
+  const rec = arr.find(r => r.sbId === sbId);
+  if (!rec) return;
 
-  // Rimuovi dal log globale (cerca per deletedAt che è univoco)
-  const entryIdx = log.findIndex(d => d.deletedAt === entry.deletedAt);
-  if (entryIdx >= 0) log.splice(entryIdx, 1);
-  localStorage.setItem('budget_deleted_log', JSON.stringify(log));
+  // Precompila il form di registrazione con i dati del record
+  document.getElementById('reg-desc').value  = rec.desc || '';
+  document.getElementById('reg-note').value  = rec.note || '';
+  document.getElementById('reg-data').value  = rec.data;
+  amountStr  = rec.importo.toString();
+  currentType = rec.tipo === 'spesa' ? 'sp' : 'en';
+  selectedCat = rec.idCat;
 
-  // Rimuovi anche da hidden_snap se era un record snapshot
-  // La chiave salvata ha 4 parti: data|desc|importo|tipo — cerca anche il formato legacy a 3 parti
-  const hiddenSnap = JSON.parse(localStorage.getItem('budget_hidden_snap')||'[]');
-  const snapBase   = entry.data + '|' + (entry.desc||'') + '|' + parseFloat(entry.importo||0).toFixed(2);
-  const hidIdx     = hiddenSnap.findIndex(k => k === snapBase || k.startsWith(snapBase + '|'));
-  if (hidIdx >= 0) hiddenSnap.splice(hidIdx, 1);
-  localStorage.setItem('budget_hidden_snap', JSON.stringify(hiddenSnap));
+  // Salva l'ID del record in modifica
+  window._editingSbId   = sbId;
+  window._editingTipo   = tipo;
 
-  showToast('↩ Cancellazione annullata');
-  renderDashboard();
-  renderStorico();
-  if (typeof renderBilancio === 'function') renderBilancio();
+  setType(currentType);
+  updateAmountDisplay();
+  renderCatGrid();
+  showPage('registra');
+  showToast('✎ Modifica il record e premi Salva');
 }
 
 // ══════════════════════════════════════════
@@ -1817,6 +1747,7 @@ function saveQuickList(list) { localStorage.setItem(QUICK_KEY, JSON.stringify(li
 
 function renderQuickGrid() {
   const list = getQuick();
+
   const grid = document.getElementById('quick-grid');
   const empty = document.getElementById('quick-empty');
   if (!list.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
@@ -1847,7 +1778,7 @@ function tapQuick(id) {
     saveRecords(records);
     showToast(`✓ ${q.emoji||'💸'} ${q.nome} — € ${eur(importo)} registrato`);
     if (currentPage === 'dashboard') renderDashboard();
-    if (getSnapshot()) renderBilancio();
+    if (_dbLoaded) renderBilancio();
   };
 
   if (q.importo > 0) {
@@ -1991,7 +1922,7 @@ function updateAmountDisplay() {
 }
 
 function renderCatGrid() {
-  const cats = getCats();
+  const cats = _DB.categorie;
   const arr  = currentType === 'sp' ? cats.spese : cats.entrate;
   const el   = document.getElementById('cat-select');
   if (!el) return;
@@ -2007,7 +1938,7 @@ function selectCat(id) {
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
-function salvaRecord() {
+async function salvaRecord() {
   const importo = parseFloat(amountStr);
   if (!importo || importo <= 0) { showToast('⚠ Inserisci un importo'); return; }
   const desc = document.getElementById('reg-desc').value.trim();
@@ -2016,36 +1947,65 @@ function salvaRecord() {
   const dataVal = document.getElementById('reg-data').value || today();
   const note    = document.getElementById('reg-note').value.trim();
 
-  const record = {
-    id:        genId(),
-    tipo:      currentType,
-    data:      dataVal,
-    desc,
-    importo,
-    idCat:     selectedCat,
-    note,
-    exported:  false,
-    createdAt: new Date().toISOString()
-  };
+  const tipoRecord = currentType === 'sp' ? 'spesa' : 'entrata';
+  const table      = currentType === 'sp' ? 'spese' : 'entrate';
+  const catArr     = currentType === 'sp' ? _DB.categorie.spese : _DB.categorie.entrate;
+  const catObj     = catArr.find(c => c.ID === selectedCat) || { ID: selectedCat, Nome: '', Colore: '#9aa3c2' };
 
-  const records = getRecords();
-  records.push(record);
-  saveRecords(records);
-  sbSaveRecord(record); // salva anche su Supabase
+  try {
+    const user = await sbCurrentUser();
+    if (!user) { showToast('❌ Non autenticato'); return; }
 
-  // Reset
-  amountStr   = '';
-  selectedCat = null;
-  document.getElementById('reg-desc').value = '';
-  document.getElementById('reg-note').value = '';
-  document.getElementById('reg-data').value = today();
-  updateAmountDisplay();
-  renderCatGrid();
+    const row = {
+      data:        dataVal,
+      descrizione: desc,
+      importo:     importo,
+      categoria:   catObj.Nome,
+      note:        note,
+      user_id:     user.id
+    };
 
-  const sign = currentType === 'sp' ? '-' : '+';
-  showToast(`✓ ${sign} € ${eur(importo)} registrato`);
-  // Aggiorna bilancio in background se snapshot presente
-  if (getSnapshot()) renderBilancio();
+    // Modifica o inserimento
+    if (window._editingSbId) {
+      // UPDATE
+      const { error } = await _sb.from(table).update(row).eq('id', window._editingSbId);
+      if (error) throw error;
+
+      const arr = window._editingTipo === 'spesa' ? _DB.spese : _DB.entrate;
+      const idx = arr.findIndex(r => r.sbId === window._editingSbId);
+      if (idx >= 0) {
+        arr[idx] = { ...arr[idx], data: dataVal, desc, importo, idCat: selectedCat,
+                     cat: catObj.Nome, catNome: catObj.Nome, catColore: catObj.Colore, note };
+      }
+      showToast('✓ Record aggiornato');
+      window._editingSbId  = null;
+      window._editingTipo  = null;
+    } else {
+      // INSERT
+      const { data, error } = await _sb.from(table).insert(row).select().single();
+      if (error) throw error;
+
+      const newRec = { sbId: data.id, tipo: tipoRecord, data: dataVal, desc, importo,
+                       idCat: selectedCat, cat: catObj.Nome, catNome: catObj.Nome,
+                       catColore: catObj.Colore, note };
+      if (currentType === 'sp') _DB.spese.unshift(newRec);
+      else _DB.entrate.unshift(newRec);
+      showToast(`✓ ${currentType==='sp'?'-':'+'} € ${eur(importo)} registrato`);
+    }
+
+    // Reset form
+    amountStr   = '';
+    selectedCat = null;
+    document.getElementById('reg-desc').value = '';
+    document.getElementById('reg-note').value = '';
+    document.getElementById('reg-data').value = today();
+    updateAmountDisplay();
+    renderCatGrid();
+    _refreshCurrentPage();
+
+  } catch(err) {
+    showToast('❌ Errore: ' + err.message, 'error');
+  }
 }
 
 // ══════════════════════════════════════════
@@ -2543,43 +2503,57 @@ function init() {
   _migrateQuickItems();
   initMonth();
   document.getElementById('reg-data').value = today();
-  renderDashboard();
   renderCatGrid();
   renderQuickGrid();
   setType('sp');
-  // _handleOAuthRedirectReturn non più necessario con Supabase
 }
-
-// ── Funzioni Supabase mobile aggiuntive ──────────────────────────
 
 async function sbLogoutMobile() {
   if (!confirm('Disconnettersi da Budget Domestico?')) return;
   await sbSignOut();
-  document.getElementById('sb-status-txt').textContent = 'Disconnesso.';
-  document.getElementById('sb-logout-btn').style.display = 'none';
+  _DB.spese = []; _DB.entrate = []; _DB.categorie = { spese: [], entrate: [] };
+  _dbLoaded = false;
   showToast('Disconnesso da Supabase');
+  // Rilancia il login
+  sbInit(async () => {
+    await loadData();
+    renderDashboard();
+    renderCatGrid();
+  });
 }
 
-async function _sbUpdateStatusUI() {
-  const user = await sbCurrentUser();
-  const statusTxt = document.getElementById('sb-status-txt');
-  const logoutBtn = document.getElementById('sb-logout-btn');
-  if (user) {
-    if (statusTxt) statusTxt.textContent = `✓ Connesso come ${user.email}`;
-    if (logoutBtn) logoutBtn.style.display = '';
-  } else {
-    if (statusTxt) statusTxt.textContent = 'Non connesso.';
-    if (logoutBtn) logoutBtn.style.display = 'none';
+async function sbSyncNow() {
+  const btn = document.getElementById('sb-sync-btn');
+  if (btn) { btn.textContent = '⟳ Sync...'; btn.disabled = true; }
+  try {
+    await loadData();
+    _refreshCurrentPage();
+    renderCatGrid();
+    showToast('✓ Dati aggiornati da Supabase');
+  } catch(e) {
+    showToast('❌ Errore sync: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.textContent = '☁ Sync'; btn.disabled = false; }
   }
 }
 
 init();
 
-// Avvio Supabase: controlla sessione e carica dati
+// Avvio Supabase: controlla sessione e carica tutti i dati
 sbInit(async () => {
-  await sbSyncLoad();
-  await _sbUpdateStatusUI();
+  const ok = await loadData();
+  if (ok) {
+    renderDashboard();
+    renderCatGrid();
+    // Aggiorna stato UI connessione
+    const user = await sbCurrentUser();
+    const statusTxt = document.getElementById('sb-status-txt');
+    const logoutBtn = document.getElementById('sb-logout-btn');
+    if (statusTxt && user) statusTxt.textContent = `✓ Connesso come ${user.email}`;
+    if (logoutBtn) logoutBtn.style.display = '';
+  }
 });
+
 </script>
 
 <!-- Google Identity Services rimosso — ora si usa Supabase Auth -->
