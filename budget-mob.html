@@ -260,9 +260,30 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
+/* ── PULL TO REFRESH ── */
+#ptr-indicator {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 0; overflow: hidden;
+  background: rgba(13,15,26,.95);
+  font-size: 13px; font-weight: 600; color: var(--t2);
+  transition: height .2s ease;
+}
+#ptr-indicator.visible { height: 54px; }
+#ptr-spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--bg4);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
+
+<!-- PULL TO REFRESH -->
+<div id="ptr-indicator"><div id="ptr-spinner"></div><span id="ptr-label">Aggiornamento...</span></div>
 
 <!-- TOP BAR -->
 <div class="topbar">
@@ -303,7 +324,7 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
     <div class="card-sub" id="kpi-pct">—</div>
   </div>
 
-  <div class="section-hdr">Ultime transazioni</div>
+  <div class="section-hdr">Transazioni del mese</div>
   <div class="tx-list" id="recent-list">
     <div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>
   </div>
@@ -405,89 +426,49 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
 <div class="page" id="page-snapshot">
   <div id="snapshot-content">
     <div class="export-card" style="background:linear-gradient(135deg,rgba(30,207,150,.12),rgba(79,142,247,.08));border-color:rgba(30,207,150,.3)">
-      <div style="font-size:16px;font-weight:700;margin-bottom:6px">📊 Dati dal PC</div>
-      <div style="font-size:13px;color:var(--t2);line-height:1.5">Carica lo snapshot esportato da Budget Domestico per vedere il bilancio aggiornato.</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">☁ PC Sync</div>
+      <div style="font-size:13px;color:var(--t2);line-height:1.5">Sincronizza i dati dal cloud Supabase per aggiornare il bilancio su tutti i dispositivi.</div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="sbSyncNow()" style="flex:1;min-width:160px">☁ Sync da Supabase</button>
-      <button class="btn" onclick="document.getElementById('snapshot-input').click()" style="flex:1;min-width:160px;background:var(--bg3);color:var(--t2);border:1px solid var(--b2)">📂 Da file locale</button>
-    </div>
-    <input type="file" id="snapshot-input" accept=".json" style="display:none" onchange="loadSnapshot(event)">
+    <button class="btn btn-primary" onclick="sbSyncNow()" style="margin-bottom:12px">☁ Sync da Supabase</button>
     <div id="snapshot-hint" class="card" style="font-size:13px;color:var(--t2);line-height:1.7">
       <b style="color:var(--t1)">Come funziona il Sync Supabase:</b><br>
-      1. Premi <b style="color:var(--green)">☁ Sync</b> in alto → i dati vengono scaricati dal cloud<br>
+      1. Premi <b style="color:var(--green)">☁ Sync</b> → i dati vengono scaricati dal cloud<br>
       2. Tutti i record inseriti da qualsiasi dispositivo appaiono qui automaticamente<br>
-      3. I nuovi record inseriti sull'iPhone vengono salvati direttamente su Supabase<br>
-      <span style="color:var(--t3);font-size:11px">Usa "Da file locale" per importare un JSON manuale se offline</span>
-    </div>
-  </div>
-  <!-- RESET DATI — dentro page-snapshot ma fuori da snapshot-content -->
-  <div style="margin-top:12px;padding:12px;background:rgba(240,86,106,.08);border:1px solid rgba(240,86,106,.3);border-radius:12px">
-    <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px">⚠️ Reset Dati</div>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      <button onclick="resetDeletedLog()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(245,161,36,.4);background:rgba(245,161,36,.1);color:var(--amber);font-size:13px;font-weight:600;cursor:pointer;text-align:left">🧹 Pulisci log cancellazioni pendenti</button>
-      <button onclick="simulateTokenExpiry()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(79,142,247,.4);background:rgba(79,142,247,.1);color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;text-align:left">🔓 Simula token scaduto (test)</button>
-      <button onclick="resetLocalRecords()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(240,86,106,.4);background:rgba(240,86,106,.1);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;text-align:left">🗑 Cancella tutti i record locali</button>
-      <button onclick="resetAll()" style="padding:9px 12px;border-radius:10px;border:1px solid rgba(240,86,106,.6);background:rgba(240,86,106,.2);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;text-align:left">💣 Reset completo (tutto tranne spese rapide)</button>
+      3. I nuovi record inseriti sull'iPhone vengono salvati direttamente su Supabase
     </div>
   </div>
 </div>
 
 <!-- EXPORT -->
 <div class="page" id="page-export">
-  <div class="export-card">
-    <div style="font-size:16px;font-weight:700;margin-bottom:6px">⬆ Esporta per Access</div>
-    <div style="font-size:13px;color:var(--t2);line-height:1.5">Scarica il CSV con tutte le transazioni registrate sull'iPhone. Importalo nel tool principale con "Importa da iPhone".</div>
-  </div>
 
+  <!-- Riepilogo DB -->
   <div class="card" id="export-stats"></div>
 
-  <div class="form-group">
-    <label class="form-label">Periodo da esportare</label>
-    <select class="form-ctrl" id="export-range">
-      <option value="all">Tutto lo storico</option>
-      <option value="month" selected>Mese corrente</option>
-      <option value="3months">Ultimi 3 mesi</option>
-      <option value="notexported">Solo non ancora esportati</option>
-    </select>
+  <!-- CSV da Supabase -->
+  <div class="section-hdr">⬇ Esporta CSV</div>
+  <div class="card" style="font-size:13px;color:var(--t2);line-height:1.5;margin-bottom:12px">
+    Scarica tutte le spese o entrate da Supabase in formato CSV, leggibile in Excel.
   </div>
+  <button class="btn btn-primary" onclick="exportCSV('spese')" style="margin-bottom:8px">⬇ CSV Spese</button>
+  <button class="btn btn-primary" onclick="exportCSV('entrate')" style="margin-bottom:20px">⬇ CSV Entrate</button>
 
-  <button class="btn btn-primary" onclick="exportCSV()" style="margin-bottom:12px">⬇ Scarica CSV</button>
-  <button class="btn btn-danger" onclick="clearExported()" style="margin-bottom:20px">🗑 Cancella già esportati</button>
-
-  <div class="section-hdr">Istruzioni</div>
-  <div class="card" style="font-size:13px;color:var(--t2);line-height:1.7">
-    <b style="color:var(--t1)">Metodo 1 — Drive (consigliato):</b><br>
-    Premi <b style="color:var(--green)">📤 Invia CSV su Drive</b> qui sopra → il file viene caricato automaticamente nella cartella <b style="color:var(--accent)">BudgetDomestico</b> su Google Drive<br>
-    Sul PC apri la cartella Google Drive → trovi il file CSV → importalo con <b style="color:var(--accent)">📱 iPhone Import</b><br><br>
-    <b style="color:var(--t1)">Metodo 2 — Manuale:</b><br>
-    Premi "Scarica CSV" → invia al PC via AirDrop o Mail → importa con <b style="color:var(--accent)">📱 iPhone Import</b>
-  </div>
-
-  <div class="section-hdr" style="margin-top:24px">Sincronizza Categorie</div>
-  <div class="card" style="font-size:13px;color:var(--t2);line-height:1.7">
-    Per aggiornare le categorie dal PC, esporta da Budget Domestico con<br>
-    <b style="color:var(--accent)">"Esporta categorie per iPhone"</b><br>
-    poi apri il file JSON qui sotto.
-  </div>
-  <button class="btn btn-ghost" onclick="importCategorie()" style="margin-bottom:12px">📂 Carica categorie da PC</button>
-  <input type="file" id="cat-file-input" accept=".json" style="display:none" onchange="loadCategorieFile(event)">
-
-  <!-- ══ SUPABASE SYNC ══ -->
-  <div class="section-hdr" style="margin-top:24px">☁ Supabase Sync</div>
-  <div class="card" id="sb-status-card" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:12px">
-    <span id="sb-status-txt">Verifica connessione...</span>
-  </div>
-  <button class="btn btn-primary" id="sb-connect-btn" onclick="sbSyncNow()" style="margin-bottom:8px">🔄 Sincronizza ora</button>
-  <button class="btn btn-ghost" id="sb-logout-btn" onclick="sbLogoutMobile()" style="margin-bottom:20px;display:none">🔓 Disconnetti account</button>
-
-  <div class="section-hdr" style="margin-top:20px">⚡ Backup Spese Rapide</div>
+  <!-- Backup spese rapide -->
+  <div class="section-hdr">⚡ Backup Spese Rapide</div>
   <div class="card" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:12px">
     Salva le tue spese rapide in un file JSON per non perderle mai quando cambi browser o dispositivo.
   </div>
   <button class="btn btn-ghost" onclick="exportQuickBackup()" style="margin-bottom:8px">💾 Salva backup spese rapide</button>
   <button class="btn btn-ghost" onclick="document.getElementById('quick-backup-input').click()" style="margin-bottom:20px">📂 Ripristina spese rapide</button>
   <input type="file" id="quick-backup-input" accept=".json" style="display:none" onchange="importQuickBackup(event)">
+
+  <!-- Supabase login/logout -->
+  <div class="section-hdr" style="margin-top:4px">☁ Account Supabase</div>
+  <div class="card" id="sb-status-card" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:12px">
+    <span id="sb-status-txt">Verifica connessione...</span>
+  </div>
+  <button class="btn btn-primary" id="sb-connect-btn" onclick="sbSyncNow()" style="margin-bottom:8px">🔄 Sincronizza ora</button>
+  <button class="btn btn-ghost" id="sb-logout-btn" onclick="sbLogoutMobile()" style="margin-bottom:20px;display:none">🔓 Disconnetti account</button>
 
 </div>
 
@@ -503,7 +484,7 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   </button>
   <button class="nav-item" id="nav-storico" onclick="showPage('storico')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-    Storico
+    Transazioni
   </button>
   <button class="nav-item" id="nav-bilancio" onclick="showPage('bilancio')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-6"/></svg>
@@ -1515,16 +1496,13 @@ function renderDashboard() {
     el.innerHTML = allTx.map(r => {
       const sign = r.tipo==='spesa' ? '-' : '+';
       const col  = r.tipo==='spesa' ? 'var(--red)' : 'var(--green)';
-      return `<div class="tx-item" onclick="toggleDel(this)">
+      return `<div class="tx-item">
         <div class="tx-dot" style="background:${r.catColore||'#9aa3c2'}"></div>
         <div class="tx-info">
           <div class="tx-desc">${r.desc||'—'}</div>
           <div class="tx-meta"><span class="badge" style="background:${r.catColore||'#9aa3c2'}22;color:${r.catColore||'#9aa3c2'}">${r.catNome||'—'}</span> · ${fmtDate(r.data)}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div class="tx-amount" style="color:${col}">${sign} € ${eur(r.importo)}</div>
-          <button class="tx-delete-btn" onclick="deleteRecord(event,${r.sbId},'${r.tipo}')">✕</button>
-        </div>
+        <div class="tx-amount" style="color:${col}">${sign} € ${eur(r.importo)}</div>
       </div>`;
     }).join('');
   }
@@ -2217,83 +2195,63 @@ function renderSnapshot() {
 //  EXPORT CSV
 // ══════════════════════════════════════════
 function renderExportStats() {
-  const records = getRecords();
-  const notExp  = records.filter(r=>!r.exported).length;
-  const el      = document.getElementById('export-stats');
-  el.innerHTML  = `
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div class="card-label">Record totali</div>
-        <div style="font-size:22px;font-weight:800">${records.length}</div>
+  const el = document.getElementById('export-stats');
+  if (!el) return;
+  const nSpese     = _DB.spese.length;
+  const nEntrate   = _DB.entrate.length;
+  const nCatSp     = (_DB.categorie || []).length;
+  const nCatEn     = (_DB.categorieEntrate || []).length;
+  el.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:10px">📊 Riepilogo database</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:var(--bg3);border-radius:10px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Spese</div>
+        <div style="font-size:20px;font-weight:800;color:var(--red)">${nSpese.toLocaleString('it')}</div>
       </div>
-      <div style="text-align:right">
-        <div class="card-label">Da esportare</div>
-        <div style="font-size:22px;font-weight:800;color:var(--amber)">${notExp}</div>
+      <div style="background:var(--bg3);border-radius:10px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Entrate</div>
+        <div style="font-size:20px;font-weight:800;color:var(--green)">${nEntrate.toLocaleString('it')}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:10px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Cat. Spese</div>
+        <div style="font-size:20px;font-weight:800;color:var(--accent)">${nCatSp}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:10px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Cat. Entrate</div>
+        <div style="font-size:20px;font-weight:800;color:var(--accent)">${nCatEn}</div>
       </div>
     </div>`;
 }
 
-function exportCSV() {
-  const allRecords = getRecords();
-  const range      = document.getElementById('export-range').value;
-  const now        = new Date();
-  const nowYM      = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const cats       = getCats();
-
-  let records = allRecords;
-  if (range === 'month')    records = allRecords.filter(r => ym(r.data) === nowYM);
-  if (range === '3months') {
-    const d3 = new Date(now); d3.setMonth(d3.getMonth()-2);
-    const from = `${d3.getFullYear()}-${String(d3.getMonth()+1).padStart(2,'0')}`;
-    records = allRecords.filter(r => ym(r.data) >= from);
-  }
-  if (range === 'notexported') records = allRecords.filter(r=>!r.exported);
+function exportCSV(tipo) {
+  const now  = new Date();
+  const isSpese = tipo === 'spese';
+  const records = isSpese ? _DB.spese : _DB.entrate;
+  const cats    = isSpese ? (_DB.categorie || []) : (_DB.categorieEntrate || []);
 
   if (!records.length) { showToast('⚠ Nessun record da esportare'); return; }
 
-  // Header CSV compatibile con il tool principale
+  const tipoLabel = isSpese ? 'spesa' : 'entrata';
   const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
-  const rows   = records.map(r => {
-    const arr  = r.tipo==='sp' ? cats.spese : cats.entrate;
-    const cat  = arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
-    const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
-    const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
-    const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
-    return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
+  const rows = records.map(r => {
+    const cat  = cats.find(c => c.ID == (r.idCat || r.IDCategoria)) || {Nome:'—'};
+    const desc = (r.desc || r.Descrizione || '').replace(/,/g,'|').replace(/"/g,'""');
+    const note = (r.note || r.Note || '').replace(/,/g,'|').replace(/"/g,'""');
+    const idCat = r.idCat || r.IDCategoria || '';
+    const importo = parseFloat(r.importo || r.Importo || 0).toFixed(2);
+    const data = r.data || r.Data || '';
+    return `${tipoLabel},${data},"${desc}",${idCat},"${cat.Nome}",${importo},"${note}"`;
   });
 
-  // Aggiungi cancellazioni
-  const DKEY2 = 'budget_deleted_log';
-  const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]')
-                  .filter(d => !d.isLocal); // escludi cancellazioni di record mai inviati al desktop
-  const delRows = delLog.map(d => {
-    const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
-    const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
-    return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
-  });
-
-  const csvFull = [header, ...rows, ...delRows].join('\n');
-  const blob = new Blob(['\uFEFF'+csvFull], {type:'text/csv;charset=utf-8'});
+  const csvFull = [header, ...rows].join('\n');
+  const blob = new Blob(['\uFEFF' + csvFull], {type:'text/csv;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `budget-iphone-${now.toISOString().slice(0,10)}.csv`;
+  a.download = `budget-${tipo}-${now.toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  // Non svuota deleted_log — verrà pulito solo all'arrivo del nuovo snapshot dal desktop
-
-  // Non marca come exported — il CSV successivo includerà ancora questi record
-  // finché il desktop non li importa. La deduplicazione sul desktop evita duplicati.
-  showToast(`✓ ${records.length} record esportati${delLog.length?' + '+delLog.length+' cancellaz.':''}`);
-  renderExportStats();
-}
-
-function clearExported() {
-  if (!confirm('Eliminare tutti i record già esportati?')) return;
-  const records = getRecords().filter(r=>!r.exported);
-  saveRecords(records);
-  showToast('✓ Record esportati eliminati');
-  renderExportStats();
+  showToast(`✓ ${records.length} record esportati`);
 }
 
 // ══════════════════════════════════════════
@@ -2558,6 +2516,51 @@ window.addEventListener('load', async function() {
     }
   });
 });
+
+// ══════════════════════════════════════════
+//  PULL TO REFRESH
+// ══════════════════════════════════════════
+(function() {
+  const PTR_PAGES = ['dashboard', 'storico'];
+  let startY = 0, pulling = false, triggered = false;
+  const ind   = document.getElementById('ptr-indicator');
+  const label = document.getElementById('ptr-label');
+  const THRESHOLD = 65;
+
+  document.addEventListener('touchstart', e => {
+    if (!PTR_PAGES.includes(currentPage)) return;
+    if (window.scrollY > 0) return;
+    startY   = e.touches[0].clientY;
+    pulling  = true;
+    triggered = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!pulling) return;
+    const delta = e.touches[0].clientY - startY;
+    if (delta < 10) return;
+    if (delta >= THRESHOLD && !triggered) {
+      triggered = true;
+      label.textContent = 'Rilascia per aggiornare';
+      ind.classList.add('visible');
+    } else if (delta < THRESHOLD) {
+      ind.classList.remove('visible');
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', async () => {
+    if (!pulling || !triggered) { pulling = false; return; }
+    pulling = false;
+    label.textContent = 'Aggiornamento...';
+    try {
+      await loadData();
+      _refreshCurrentPage();
+    } finally {
+      ind.classList.remove('visible');
+      triggered = false;
+    }
+  });
+})();
 
 </script>
 
