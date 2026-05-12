@@ -414,16 +414,15 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <button class="titlebar-btn" id="btn-disc" data-action="act2" style="display:none">🔌 Disconnetti</button>
     <button class="titlebar-btn" data-action="act3" title="Esporta CSV Spese">↓ CSV Spese</button>
     <button class="titlebar-btn" data-action="act4" title="Esporta CSV Entrate">↓ CSV Entrate</button>
-    <button class="titlebar-btn" style="color:var(--accent);border-color:var(--accent)" onclick="importFromIphone()" title="Importa CSV dall'app iPhone">📱 iPhone Import</button>
-    <button class="titlebar-btn" style="color:var(--amber);border-color:var(--amber)" onclick="exportCategorieIphone()" title="Esporta categorie per iPhone">📤 Cat. iPhone</button>
-    <button class="titlebar-btn" style="color:var(--green);border-color:var(--green)" onclick="exportSnapshotIphone()" title="Esporta snapshot per iPhone (download locale)">📊 Snapshot</button>
-    <input type="file" id="iphone-csv-input" accept=".csv" style="display:none" onchange="processIphoneCSV(event)">
     <button class="titlebar-btn" data-action="act56" style="background:rgba(100,180,255,0.15);border-color:rgba(100,180,255,0.4);color:#64b4ff" title="Esporta JSON">⬆ JSON</button>
     <button class="titlebar-btn" data-action="act57" style="background:rgba(30,207,150,0.15);border-color:rgba(30,207,150,0.4);color:#1ecf96" title="Importa JSON">⬇ JSON</button>
     <button class="titlebar-btn" id="btn-sb-user" onclick="sbLogout()" title="Account Supabase" style="display:none;background:rgba(30,207,150,.12);border-color:rgba(30,207,150,.4);color:#1ecf96">● Connesso</button>
     <button class="titlebar-btn" id="btn-backup" onclick="sbBackupDB()" style="background:rgba(124,92,246,.12);border-color:rgba(124,92,246,.4);color:#7c5cf6" title="Scarica backup completo Supabase">⬇ Backup</button>
     <button class="titlebar-btn" id="btn-restore" onclick="document.getElementById('restore-file-input').click()" style="background:rgba(245,161,36,.12);border-color:rgba(245,161,36,.4);color:#f5a124" title="Ripristina da file di backup">⬆ Restore</button>
     <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="sbRestoreDB(event)">
+    <button class="titlebar-btn" onclick="exportSettings()" style="background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.4);color:#14b8a6" title="Scarica backup impostazioni localStorage">⬇ Settings</button>
+    <button class="titlebar-btn" onclick="document.getElementById('settings-import-input').click()" style="background:rgba(251,146,60,.12);border-color:rgba(251,146,60,.4);color:#fb923c" title="Ripristina impostazioni localStorage">⬆ Settings</button>
+    <input type="file" id="settings-import-input" accept=".json" style="display:none" onchange="importSettings(event)">
     <input type="file" id="imp-json-input" accept=".json" style="display:none">
   </div>
   <div class="titlebar-path" id="db-path-label">● Dati locali</div>
@@ -2182,6 +2181,50 @@ async function sbRestoreDB(event) {
     } catch(e) {
       showToast('❌ Errore restore: ' + e.message, 'error');
     }
+  };
+  reader.readAsText(file);
+}
+
+// ── Backup/Restore impostazioni localStorage ─────────────────────
+const _SETTINGS_EXCLUDE = [
+  'desktop_drive_token',
+  'budget_drive_imported_csv_ids',
+  'budget_deleted_ids_blacklist',
+  'budget_deleted_ids_log'
+];
+
+function exportSettings() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!_SETTINGS_EXCLUDE.includes(k)) data[k] = localStorage.getItem(k);
+  }
+  if (!Object.keys(data).length) { showToast('⚠ Nessuna impostazione da salvare', 'error'); return; }
+  const blob = new Blob([JSON.stringify({type:'budget-settings',v:1,savedAt:new Date().toISOString(),data}, null, 2)],
+                        {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `budget-settings-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`✓ Settings salvati (${Object.keys(data).length} chiavi)`, 'success');
+}
+
+function importSettings(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      const data = parsed.type === 'budget-settings' ? parsed.data : parsed;
+      if (!data || typeof data !== 'object') { showToast('⚠ File non valido', 'error'); return; }
+      const keys = Object.keys(data).filter(k => !_SETTINGS_EXCLUDE.includes(k));
+      if (!confirm(`Ripristinare ${keys.length} impostazioni dal file?\n\nLe impostazioni attuali verranno sovrascritte.`)) return;
+      keys.forEach(k => localStorage.setItem(k, data[k]));
+      showToast(`✓ ${keys.length} impostazioni ripristinate — ricarica la pagina`, 'success');
+    } catch { showToast('⚠ Errore lettura file', 'error'); }
   };
   reader.readAsText(file);
 }
