@@ -187,8 +187,19 @@ window.budgetAPI = {
         res = await _sb.from('spese').insert(row).select().single();
       }
       if (res.error) throw res.error;
-      record.MdbID = res.data.id;
-      return { success: true, record, supabaseSaved: true };
+
+      // Ritorna record normalizzato (compatibile con _normSpese)
+      const saved = {
+        ...record,
+        MdbID:     res.data.id,
+        ID:        record.ID || res.data.id,
+        Categoria: catNome,
+        Descrizione: row.descrizione,
+        Importo:   row.importo,
+        Data:      row.data,
+        Note:      row.note
+      };
+      return { success: true, record: saved, supabaseSaved: true };
     } catch (e) {
       return { success: false, error: e.message };
     }
@@ -223,8 +234,19 @@ window.budgetAPI = {
         res = await _sb.from('entrate').insert(row).select().single();
       }
       if (res.error) throw res.error;
-      record.MdbID = res.data.id;
-      return { success: true, record, supabaseSaved: true };
+
+      // Ritorna record normalizzato (compatibile con _normEntrate)
+      const saved = {
+        ...record,
+        MdbID:     res.data.id,
+        ID:        record.ID || res.data.id,
+        Categoria: catNome,
+        Descrizione: row.descrizione,
+        Importo:   row.importo,
+        Data:      row.data,
+        Note:      row.note
+      };
+      return { success: true, record: saved, supabaseSaved: true };
     } catch (e) {
       return { success: false, error: e.message };
     }
