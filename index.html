@@ -7746,7 +7746,7 @@ function renderInlineForms() {
       <span style="font-size:10px;color:var(--amber);background:rgba(245,161,36,.15);padding:2px 7px;border-radius:10px;font-family:var(--m)">⚡ esclusa dalle previsioni</span>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-primary" onclick="saveInline('spesa')">+ Aggiungi Spesa</button>
+      <button id="inline-sp-save" class="btn-primary" onclick="saveInline('spesa')">+ Aggiungi Spesa</button>
       <button class="btn-secondary" style="font-size:11px" onclick="saveAsPref('spesa')" title="Salva i valori attuali come preferito">⭐ Salva come preferito</button>
     </div>
   `;
@@ -7764,7 +7764,7 @@ function renderInlineForms() {
       <span style="font-size:10px;color:var(--amber);background:rgba(245,161,36,.15);padding:2px 7px;border-radius:10px;font-family:var(--m)">⚡ esclusa dalle previsioni</span>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-primary" style="background:var(--green)" onclick="saveInline('entrata')">+ Aggiungi Entrata</button>
+      <button id="inline-en-save" class="btn-primary" style="background:var(--green)" onclick="saveInline('entrata')">+ Aggiungi Entrata</button>
       <button class="btn-secondary" style="font-size:11px" onclick="saveAsPref('entrata')" title="Salva i valori attuali come preferito">⭐ Salva come preferito</button>
     </div>
   `;
@@ -7787,23 +7787,35 @@ async function saveInline(tipo) {
     showToast('Compila tutti i campi e seleziona una categoria', 'error'); return;
   }
 
-  const record = { Data: data, Descrizione: desc, Importo: importo, IDCategoria: idCat, Note: note };
-  const res = tipo === 'spesa' ? await window.budgetAPI.saveSpesa(record) : await window.budgetAPI.saveEntrata(record);
-  if (res.success) {
-    // Ricarica sempre da Supabase
-    const reload = await window.budgetAPI.loadData();
-    if (reload.success) {
-      DB = reload.data;
-      populateCatFilters();
+  // Disabilita il pulsante per prevenire doppio click
+  const btnId = tipo === 'spesa' ? 'inline-sp-save' : 'inline-en-save';
+  const saveBtn = document.getElementById(btnId);
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Salvataggio...'; }
+
+  try {
+    const record = { Data: data, Descrizione: desc, Importo: importo, IDCategoria: idCat, Note: note };
+    const res = tipo === 'spesa' ? await window.budgetAPI.saveSpesa(record) : await window.budgetAPI.saveEntrata(record);
+    if (res.success) {
+      // Ricarica sempre da Supabase
+      const reload = await window.budgetAPI.loadData();
+      if (reload.success) {
+        DB = reload.data;
+        populateCatFilters();
+      }
+      renderAll();
+      updateStatus('local', null);
+      showToast('Record aggiunto ✓', 'success');
+      document.getElementById(`${prefix}-desc`).value = '';
+      document.getElementById(`${prefix}-importo`).value = '';
+      document.getElementById(`${prefix}-note`).value = '';
+      const _strChk = document.getElementById(tipo==='spesa'?'inline-sp-str':'inline-en-str');
+      if (_strChk) _strChk.checked = false;
+    } else {
+      showToast('Errore nel salvataggio', 'error');
     }
-    renderAll();
-    updateStatus('local', null);
-    showToast('Record aggiunto ✓', 'success');
-    document.getElementById(`${prefix}-desc`).value = '';
-    document.getElementById(`${prefix}-importo`).value = '';
-    document.getElementById(`${prefix}-note`).value = '';
-    const _strChk = document.getElementById(tipo==='spesa'?'inline-sp-str':'inline-en-str');
-    if (_strChk) _strChk.checked = false;
+  } finally {
+    // Riabilita sempre il pulsante
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = tipo === 'spesa' ? '+ Aggiungi Spesa' : '+ Aggiungi Entrata'; }
   }
 }
 
