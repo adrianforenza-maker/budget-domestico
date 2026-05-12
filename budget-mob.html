@@ -1229,6 +1229,7 @@ let currentType = 'sp';
 let amountStr   = '';
 let selectedCat = null;
 let currentMonth, currentMonthSt;
+let bilAnno     = new Date().getFullYear();
 
 function today() {
   const d = new Date();
@@ -1277,25 +1278,36 @@ function renderBilancio() {
     if (r.tipo === 'spesa')   monthMap[ymR].spese   += r.importo;
     if (r.tipo === 'entrata') monthMap[ymR].entrate += r.importo;
   });
-  const months = Object.values(monthMap)
-    .sort((a,b) => a.ym.localeCompare(b.ym));
+  const allMonths = Object.values(monthMap).sort((a,b) => a.ym.localeCompare(b.ym));
 
-  if (!months.length) {
+  if (!allMonths.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Nessun dato disponibile</div></div>';
     return;
   }
 
-  // ── Calcola entratePrec e saldoBil per ogni mese ───────────────
-  // "Mese Prec.": le entrate di riferimento del mese M sono quelle del mese M-1
-  // (logica identica all'app desktop — lo stipendio arriva il mese dopo rispetto alle spese)
-  months.forEach((m, i) => {
-    if (i === 0) {
-      m.entratePrec = m.entrate; // primo mese: non c'è precedente
-      m.ymPrec = null;
-    } else {
-      m.entratePrec = months[i-1].entrate;
-      m.ymPrec      = months[i-1].ym;
-    }
+  // ── Anno corrente e anni disponibili ──────────────────────────
+  const nowYear  = new Date().getFullYear();
+  const nowMonth = new Date().getMonth(); // 0-based
+  const availableYears = [...new Set(allMonths.map(m => parseInt(m.ym.slice(0,4))))].sort();
+  // Assicura bilAnno sia in range
+  if (!availableYears.includes(bilAnno)) bilAnno = nowYear;
+
+  const prevYear = availableYears[availableYears.indexOf(bilAnno) - 1];
+  const nextYear = availableYears[availableYears.indexOf(bilAnno) + 1];
+
+  // ── Filtro mesi anno selezionato (anno corrente: fino al mese corrente) ──
+  const annoStr = bilAnno.toString();
+  let mesiAnnoAll = allMonths.filter(m => m.ym.startsWith(annoStr));
+  // Per l'anno corrente mostra solo fino al mese in corso
+  if (bilAnno === nowYear) {
+    const limYM = `${nowYear}-${String(nowMonth+1).padStart(2,'0')}`;
+    mesiAnnoAll = mesiAnnoAll.filter(m => m.ym <= limYM);
+  }
+
+  // ── Calcola entratePrec per tutti i mesi (usando tutti, non solo anno corrente) ──
+  allMonths.forEach((m, i) => {
+    m.entratePrec = i === 0 ? m.entrate : allMonths[i-1].entrate;
+    m.ymPrec      = i === 0 ? null : allMonths[i-1].ym;
     m.saldo    = m.entrate - m.spese;
     m.saldoBil = m.entratePrec - m.spese;
   });
@@ -1308,15 +1320,15 @@ function renderBilancio() {
     return 'Prec.';
   };
 
-  const annoCorrente = new Date().getFullYear().toString();
-  const mesiAnno   = months.filter(m => m.ym.startsWith(annoCorrente));
-  const ytdEntrate = mesiAnno.reduce((s,m) => s + getEn(m), 0);
-  const ytdSpese   = mesiAnno.reduce((s,m) => s + m.spese, 0);
-  const ytdSaldo   = mesiAnno.reduce((s,m) => s + getSaldo(m), 0);
+  // ── YTD anno selezionato ───────────────────────────────────────
+  const ytdEntrate = mesiAnnoAll.reduce((s,m) => s + getEn(m), 0);
+  const ytdSpese   = mesiAnnoAll.reduce((s,m) => s + m.spese, 0);
+  const ytdSaldo   = mesiAnnoAll.reduce((s,m) => s + getSaldo(m), 0);
 
-  const last6  = months.slice(-6);
-  const maxVal = Math.max(...last6.map(m => Math.max(getEn(m), m.spese)), 1);
-  const bars   = last6.map(m => {
+  // ── Grafico: tutti i mesi dell'anno selezionato (max 12) ──────
+  const barsData = mesiAnnoAll;
+  const maxVal   = Math.max(...barsData.map(m => Math.max(getEn(m), m.spese)), 1);
+  const bars = barsData.map(m => {
     const [,mo] = m.ym.split('-');
     const label = mesi[parseInt(mo)-1];
     const hSp   = Math.round((m.spese/maxVal)*60);
@@ -1336,22 +1348,24 @@ function renderBilancio() {
     </div>`;
   }).join('');
 
-  const lastM    = months.at(-1);
-  const lastSal  = getSaldo(lastM);
-  const lastEn   = getEn(lastM);
-  const lastEnLbl = getEnLbl(lastM);
-  const bilCol   = lastSal >= 0 ? 'var(--green)' : 'var(--red)';
+  // ── Mese più recente dell'anno selezionato ────────────────────
+  const lastM     = mesiAnnoAll.at(-1);
+  const lastSal   = lastM ? getSaldo(lastM) : 0;
+  const lastEn    = lastM ? getEn(lastM) : 0;
+  const lastEnLbl = lastM ? getEnLbl(lastM) : '';
+  const bilCol    = lastSal >= 0 ? 'var(--green)' : 'var(--red)';
+  const lastMLabel = lastM ? `${mesi[parseInt(lastM.ym.split('-')[1])-1]} ${lastM.ym.split('-')[0]}` : '';
 
-  // Top categorie mese corrente
-  const nowYM = today().slice(0,7);
+  // ── Top categorie anno selezionato ────────────────────────────
   const catTotMap = {};
-  _DB.spese.filter(r => r.data.startsWith(nowYM)).forEach(r => {
-    if (!catTotMap[r.catNome]) catTotMap[r.catNome] = { nome: r.catNome, colore: r.catColore, totale: 0 };
-    catTotMap[r.catNome].totale += r.importo;
-  });
+  _DB.spese.filter(r => r.data.startsWith(annoStr) && (bilAnno !== nowYear || r.data.slice(0,7) <= `${nowYear}-${String(nowMonth+1).padStart(2,'0')}`))
+    .forEach(r => {
+      if (!catTotMap[r.catNome]) catTotMap[r.catNome] = { nome: r.catNome, colore: r.catColore, totale: 0 };
+      catTotMap[r.catNome].totale += r.importo;
+    });
   const topCatSorted = Object.values(catTotMap).sort((a,b) => b.totale-a.totale).slice(0,10);
   const topCatHtml   = topCatSorted.map(c => {
-    const pct = lastM.spese > 0 ? Math.round(c.totale/lastM.spese*100) : 0;
+    const pct = ytdSpese > 0 ? Math.round(c.totale/ytdSpese*100) : 0;
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="width:10px;height:10px;border-radius:50%;background:${c.colore};flex-shrink:0"></div>
       <div style="flex:1;font-size:13px">${c.nome}</div>
@@ -1360,6 +1374,7 @@ function renderBilancio() {
     </div>`;
   }).join('');
 
+  // ── Toggle modo entrate ───────────────────────────────────────
   const toggleHtml = `
     <div style="display:flex;gap:0;border:1px solid rgba(255,255,255,.15);border-radius:8px;overflow:hidden;margin-bottom:14px;font-size:12px;font-weight:700">
       <button onclick="setBilModo('prec')"
@@ -1372,20 +1387,29 @@ function renderBilancio() {
       </button>
     </div>`;
 
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div>
-        <div style="font-size:11px;color:var(--t3)">☁ Supabase</div>
-        <div style="font-size:12px;font-weight:600">${_DB.spese.length + _DB.entrate.length} record totali</div>
+  // ── Navigatore anno ───────────────────────────────────────────
+  const isCurrentYear = bilAnno === nowYear;
+  const annoLabel = isCurrentYear ? `${bilAnno} (in corso)` : bilAnno.toString();
+  const yearNavHtml = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;background:var(--bg3);border-radius:12px;padding:10px 12px">
+      <button onclick="setBilAnno(${prevYear ?? bilAnno})" style="background:none;border:none;color:${prevYear?'var(--accent)':'var(--bg4)'};font-size:22px;cursor:${prevYear?'pointer':'default'};padding:0 4px;line-height:1">‹</button>
+      <div style="text-align:center">
+        <div style="font-size:18px;font-weight:800;color:var(--t1)">${bilAnno}</div>
+        ${isCurrentYear ? `<div style="font-size:10px;color:var(--accent);font-weight:600">Anno in corso · fino a ${mesi[nowMonth]}</div>` : `<div style="font-size:10px;color:var(--t3)">Anno solare completo</div>`}
       </div>
-      <button class="btn" style="padding:7px 12px;font-size:11px;background:var(--bg3);color:var(--accent);border:1px solid var(--accent);width:auto"
-        onclick="loadData().then(() => renderBilancio())">🔄 Aggiorna</button>
-    </div>
+      <button onclick="setBilAnno(${nextYear ?? bilAnno})" style="background:none;border:none;color:${nextYear?'var(--accent)':'var(--bg4)'};font-size:22px;cursor:${nextYear?'pointer':'default'};padding:0 4px;line-height:1">›</button>
+    </div>`;
 
+  const annoRiepilogoLabel = isCurrentYear
+    ? `${annoStr} — GEN › ${mesi[nowMonth].toUpperCase()}`
+    : `${annoStr} — ANNO COMPLETO`;
+
+  el.innerHTML = `
+    ${yearNavHtml}
     ${toggleHtml}
 
     <div class="card" style="margin-bottom:12px">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">ANNO ${annoCorrente} — RIEPILOGO</div>
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">${annoRiepilogoLabel}</div>
       <div style="display:flex;gap:8px">
         <div style="flex:1;text-align:center">
           <div style="font-size:10px;color:var(--t3)">Entrate</div>
@@ -1403,18 +1427,20 @@ function renderBilancio() {
       </div>
     </div>
 
+    ${barsData.length ? `
     <div class="card" style="margin-bottom:12px">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">ULTIMI 6 MESI</div>
-      <div style="display:flex;gap:4px;align-items:flex-end">${bars}</div>
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">MESE PER MESE — ${annoStr}</div>
+      <div style="display:flex;gap:2px;align-items:flex-end;overflow-x:auto;padding-bottom:4px">${bars}</div>
       <div style="display:flex;gap:8px;margin-top:8px;justify-content:center;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--green);border-radius:2px"></div>${modo==='prec'?'Entr. rif.':'Entrate'}</div>
         <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--red);border-radius:2px"></div>Uscite</div>
       </div>
-    </div>
+    </div>` : ''}
 
+    ${lastM ? `
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:8px">
-        MESE CORRENTE — ${mesi[parseInt(lastM.ym.split('-')[1])-1]} ${lastM.ym.split('-')[0]}
+        MESE PIÙ RECENTE — ${lastMLabel}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
@@ -1430,17 +1456,22 @@ function renderBilancio() {
         <div style="font-size:10px;color:var(--t3);margin-bottom:2px">BILANCIO</div>
         <div style="font-size:22px;font-weight:800;color:${bilCol}">${lastSal<0?'-':''}€ ${eur(Math.abs(lastSal))}</div>
       </div>
-    </div>
+    </div>` : ''}
 
     ${topCatSorted.length ? `
     <div class="card">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE — MESE CORRENTE</div>
+      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE — ${annoStr}</div>
       ${topCatHtml}
     </div>` : ''}`;
 }
 
 function setBilModo(modo) {
   localStorage.setItem('bilModoEntrate', modo);
+  renderBilancio();
+}
+
+function setBilAnno(anno) {
+  bilAnno = parseInt(anno);
   renderBilancio();
 }
 
