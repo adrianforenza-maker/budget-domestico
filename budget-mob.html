@@ -2199,8 +2199,8 @@ function renderExportStats() {
   if (!el) return;
   const nSpese     = _DB.spese.length;
   const nEntrate   = _DB.entrate.length;
-  const nCatSp     = (_DB.categorie || []).length;
-  const nCatEn     = (_DB.categorieEntrate || []).length;
+  const nCatSp     = (_DB.categorie?.spese || []).length;
+  const nCatEn     = (_DB.categorie?.entrate || []).length;
   el.innerHTML = `
     <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:10px">📊 Riepilogo database</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -2227,7 +2227,7 @@ function exportCSV(tipo) {
   const now  = new Date();
   const isSpese = tipo === 'spese';
   const records = isSpese ? _DB.spese : _DB.entrate;
-  const cats    = isSpese ? (_DB.categorie || []) : (_DB.categorieEntrate || []);
+  const cats    = isSpese ? (_DB.categorie?.spese || []) : (_DB.categorie?.entrate || []);
 
   if (!records.length) { showToast('⚠ Nessun record da esportare'); return; }
 
