@@ -7454,21 +7454,11 @@ async function saveRecord(tipo, id) {
   }
 
   if (res.success) {
-    if (res.data) {
-      // MDB connesso: usa i dati ricaricati dal DB (fonte di verità)
-      DB.dati = res.data.dati; DB.datiEntrate = res.data.datiEntrate;
-      if (res.data.categorie) DB.categorie = res.data.categorie;
-      if (res.data.categorieEntrate) DB.categorieEntrate = res.data.categorieEntrate;
-    } else {
-      // Modalità locale: aggiorna manualmente
-      const saved = res.record;
-      if (tipo === 'spesa') {
-        const idx = DB.dati.findIndex(r => r.ID === saved.ID);
-        if (idx >= 0) DB.dati[idx] = saved; else DB.dati.push(saved);
-      } else {
-        const idx = DB.datiEntrate.findIndex(r => r.ID === saved.ID);
-        if (idx >= 0) DB.datiEntrate[idx] = saved; else DB.datiEntrate.push(saved);
-      }
+    // Ricarica sempre da Supabase — fonte di verità, evita inconsistenze in memoria
+    const reload = await window.budgetAPI.loadData();
+    if (reload.success) {
+      DB = reload.data;
+      populateCatFilters();
     }
     closeForm();
     renderAll();
@@ -7800,8 +7790,12 @@ async function saveInline(tipo) {
   const record = { Data: data, Descrizione: desc, Importo: importo, IDCategoria: idCat, Note: note };
   const res = tipo === 'spesa' ? await window.budgetAPI.saveSpesa(record) : await window.budgetAPI.saveEntrata(record);
   if (res.success) {
-    const saved = res.record;
-    if (tipo === 'spesa') DB.dati.push(saved); else DB.datiEntrate.push(saved);
+    // Ricarica sempre da Supabase
+    const reload = await window.budgetAPI.loadData();
+    if (reload.success) {
+      DB = reload.data;
+      populateCatFilters();
+    }
     renderAll();
     updateStatus('local', null);
     showToast('Record aggiunto ✓', 'success');
@@ -13153,11 +13147,7 @@ async function confirmInsertPreferiti() {
         const res = pr.tipo === 'spesa'
           ? await window.budgetAPI.saveSpesa(record)
           : await window.budgetAPI.saveEntrata(record);
-        if (res.success) {
-          if (pr.tipo === 'spesa') DB.dati.push(res.record);
-          else DB.datiEntrate.push(res.record);
-          ok++;
-        } else { err++; }
+        if (res.success) { ok++; } else { err++; }
       } catch(e) { err++; }
     }
   }
@@ -13166,6 +13156,9 @@ async function confirmInsertPreferiti() {
   if (btn) { btn.disabled = false; btn.textContent = origText; }
 
   closeInsertPref();
+  // Ricarica da Supabase dopo tutti gli insert
+  const reloadPref = await window.budgetAPI.loadData();
+  if (reloadPref.success) { DB = reloadPref.data; populateCatFilters(); }
   renderAll();
   const st = await window.budgetAPI.getStatus();
   updateStatus(st.connected ? 'mdb' : 'local', st.mdbPath);
@@ -13420,15 +13413,14 @@ async function processIphoneCSV(e) {
       const res = r.tipo === 'spesa'
         ? await window.budgetAPI.saveSpesa(record)
         : await window.budgetAPI.saveEntrata(record);
-      if (res.success) {
-        if (r.tipo === 'spesa') DB.dati.push(res.record);
-        else DB.datiEntrate.push(res.record);
-        ok++;
-      } else { err++; }
+      if (res.success) { ok++; } else { err++; }
     } catch(ex) { err++; }
   }
 
   e.target.value = '';
+  // Ricarica da Supabase dopo tutti gli insert
+  const reloadSync = await window.budgetAPI.loadData();
+  if (reloadSync.success) { DB = reloadSync.data; populateCatFilters(); }
   _buildIdx();
   renderAll();
   const st = await window.budgetAPI.getStatus();
@@ -14162,14 +14154,12 @@ async function _autoInsertConfirm() {
       const res = p.tipo === 'spesa'
         ? await window.budgetAPI.saveSpesa(record)
         : await window.budgetAPI.saveEntrata(record);
-      if (res.success) {
-        if (p.tipo === 'spesa') DB.dati.push(res.record);
-        else DB.datiEntrate.push(res.record);
-        inserted++;
-      }
+      if (res.success) { inserted++; }
     } catch(e) {}
   }
   if (inserted > 0) {
+    const reloadAuto = await window.budgetAPI.loadData();
+    if (reloadAuto.success) { DB = reloadAuto.data; populateCatFilters(); }
     renderAll();
     showToast(`✓ ${inserted} record auto-inserit${inserted===1?'o':'i'}`, 'success');
   }
