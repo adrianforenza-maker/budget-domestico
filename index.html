@@ -421,9 +421,9 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <button class="titlebar-btn" data-action="act56" style="background:rgba(100,180,255,0.15);border-color:rgba(100,180,255,0.4);color:#64b4ff" title="Esporta JSON">⬆ JSON</button>
     <button class="titlebar-btn" data-action="act57" style="background:rgba(30,207,150,0.15);border-color:rgba(30,207,150,0.4);color:#1ecf96" title="Importa JSON">⬇ JSON</button>
     <button class="titlebar-btn" id="btn-sb-user" onclick="sbLogout()" title="Account Supabase" style="display:none;background:rgba(30,207,150,.12);border-color:rgba(30,207,150,.4);color:#1ecf96">● Connesso</button>
-    <button class="titlebar-btn" id="btn-drive-connect" onclick="desktopDriveConnect()" style="background:rgba(66,133,244,.12);border-color:rgba(66,133,244,.4);color:#4285f4" title="Connetti Google Drive">☁ Drive</button>
-    <button class="titlebar-btn" id="btn-drive-upload" onclick="desktopDriveUploadSnapshot()" style="display:none;background:rgba(30,207,150,.12);border-color:rgba(30,207,150,.4);color:#1ecf96" title="Carica snapshot su Drive">⬆ Snap→Drive</button>
-    <button class="titlebar-btn" id="btn-drive-csv" onclick="desktopDriveDownloadCSV()" style="display:none;background:rgba(245,161,36,.12);border-color:rgba(245,161,36,.4);color:#f5a124" title="Scarica CSV iPhone da Drive">⬇ CSV←Drive</button>
+    <button class="titlebar-btn" id="btn-backup" onclick="sbBackupDB()" style="background:rgba(124,92,246,.12);border-color:rgba(124,92,246,.4);color:#7c5cf6" title="Scarica backup completo Supabase">⬇ Backup</button>
+    <button class="titlebar-btn" id="btn-restore" onclick="document.getElementById('restore-file-input').click()" style="background:rgba(245,161,36,.12);border-color:rgba(245,161,36,.4);color:#f5a124" title="Ripristina da file di backup">⬆ Restore</button>
+    <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="sbRestoreDB(event)">
     <input type="file" id="imp-json-input" accept=".json" style="display:none">
   </div>
   <div class="titlebar-path" id="db-path-label">● Dati locali</div>
@@ -2051,6 +2051,139 @@ async function sbLogout() {
   if (btnUser) btnUser.style.display = 'none';
   DB = { dati: [], datiEntrate: [], categorie: [], categorieEntrate: [] };
   init();
+}
+
+// ── Backup completo Supabase → file JSON ────────────────────────
+async function sbBackupDB() {
+  const btn = document.getElementById('btn-backup');
+  const origText = btn ? btn.textContent : '';
+  try {
+    if (btn) { btn.textContent = '⏳ Export...'; btn.disabled = true; }
+
+    const user = await sbCurrentUser();
+    if (!user) { showToast('❌ Non autenticato', 'error'); return; }
+
+    // Scarica tutte e 4 le tabelle in parallelo
+    const [rSpese, rEntrate, rCats, rCatsEn] = await Promise.all([
+      _fetchAll('spese',            'data',  false),
+      _fetchAll('entrate',          'data',  false),
+      _sb.from('categorie').select('*').order('nome'),
+      _sb.from('categorie_entrate').select('*').order('nome')
+    ]);
+    if (rCats.error)   throw rCats.error;
+    if (rCatsEn.error) throw rCatsEn.error;
+
+    const backup = {
+      type:        'budget-backup',
+      version:     1,
+      exportedAt:  new Date().toISOString(),
+      userEmail:   user.email,
+      stats: {
+        spese:             rSpese.length,
+        entrate:           rEntrate.length,
+        categorie:         (rCats.data||[]).length,
+        categorie_entrate: (rCatsEn.data||[]).length
+      },
+      data: {
+        spese:             rSpese,
+        entrate:           rEntrate,
+        categorie:         rCats.data  || [],
+        categorie_entrate: rCatsEn.data || []
+      }
+    };
+
+    const ts   = new Date().toISOString().slice(0,10);
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `budget-backup-${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+    const tot = backup.stats.spese + backup.stats.entrate;
+    showToast(`✓ Backup scaricato — ${tot} record (${backup.stats.spese} spese, ${backup.stats.entrate} entrate)`, 'success');
+  } catch(e) {
+    showToast('❌ Errore backup: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
+}
+
+// ── Restore da file JSON → Supabase ─────────────────────────────
+async function sbRestoreDB(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const backup = JSON.parse(ev.target.result);
+      if (backup.type !== 'budget-backup' || !backup.data) {
+        showToast('⚠ File non valido — non è un backup Budget Domestico', 'error');
+        return;
+      }
+
+      const { spese, entrate, categorie, categorie_entrate } = backup.data;
+      const tot = (spese||[]).length + (entrate||[]).length;
+      const expDate = new Date(backup.exportedAt).toLocaleDateString('it-IT');
+      if (!confirm(
+        `Ripristino backup del ${expDate}\n\n` +
+        `• ${(spese||[]).length} spese\n` +
+        `• ${(entrate||[]).length} entrate\n` +
+        `• ${(categorie||[]).length} categorie spese\n` +
+        `• ${(categorie_entrate||[]).length} categorie entrate\n\n` +
+        `ATTENZIONE: questa operazione svuota il database attuale e lo ricostruisce dal backup.\n\nProcedere?`
+      )) return;
+
+      const btn = document.getElementById('btn-restore');
+      const origText = btn ? btn.textContent : '';
+      try {
+        if (btn) { btn.textContent = '⏳ Restore...'; btn.disabled = true; }
+
+        const user = await sbCurrentUser();
+        if (!user) { showToast('❌ Non autenticato', 'error'); return; }
+
+        // Svuota tutto
+        await Promise.all([
+          _sb.from('spese').delete().neq('id', 0),
+          _sb.from('entrate').delete().neq('id', 0),
+          _sb.from('categorie').delete().neq('id', 0),
+          _sb.from('categorie_entrate').delete().neq('id', 0)
+        ]);
+
+        // Reinserisce in batch da 200 record
+        const batchInsert = async (table, rows) => {
+          if (!rows || !rows.length) return;
+          const clean = rows.map(r => { const o = {...r}; delete o.id; return o; });
+          for (let i = 0; i < clean.length; i += 200) {
+            const { error } = await _sb.from(table).insert(clean.slice(i, i + 200));
+            if (error) throw error;
+          }
+        };
+
+        await batchInsert('categorie',         categorie);
+        await batchInsert('categorie_entrate', categorie_entrate);
+        await batchInsert('spese',             spese);
+        await batchInsert('entrate',           entrate);
+
+        showToast(`✓ Restore completato — ${tot} record ripristinati`, 'success');
+
+        // Ricarica i dati nell'app
+        const res = await window.budgetAPI.loadData();
+        if (res && res.success) {
+          DB = res.data;
+          updateStatus('supabase', null);
+          showPage('bilancio');
+        }
+      } finally {
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
+      }
+    } catch(e) {
+      showToast('❌ Errore restore: ' + e.message, 'error');
+    }
+  };
+  reader.readAsText(file);
 }
 
 function updateStatus(source, mdbPath) {
