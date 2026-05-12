@@ -35,6 +35,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Budget Domestico v2.1</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="supabase-layer.js"></script>
 <script>
 
@@ -422,6 +423,7 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="sbRestoreDB(event)">
     <button class="titlebar-btn" onclick="exportSettings()" style="background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.4);color:#14b8a6" title="Scarica backup impostazioni localStorage">⬇ Settings</button>
     <button class="titlebar-btn" onclick="document.getElementById('settings-import-input').click()" style="background:rgba(251,146,60,.12);border-color:rgba(251,146,60,.4);color:#fb923c" title="Ripristina impostazioni localStorage">⬆ Settings</button>
+    <button class="titlebar-btn" onclick="exportMDB()" style="background:rgba(245,101,101,.12);border-color:rgba(245,101,101,.4);color:#f56565" title="Esporta 4 CSV nel formato Access (ZIP)">⬇ MDB Export</button>
     <input type="file" id="settings-import-input" accept=".json" style="display:none" onchange="importSettings(event)">
     <input type="file" id="imp-json-input" accept=".json" style="display:none">
   </div>
@@ -2227,6 +2229,77 @@ function importSettings(e) {
     } catch { showToast('⚠ Errore lettura file', 'error'); }
   };
   reader.readAsText(file);
+}
+
+// ── Export 4 CSV nel formato Access (ZIP) ───────────────────────
+async function exportMDB() {
+  const btn = document.querySelector('[onclick="exportMDB()"]');
+  const origText = btn ? btn.textContent : '';
+  try {
+    if (btn) { btn.textContent = '⏳ Export...'; btn.disabled = true; }
+
+    const user = await sbCurrentUser();
+    if (!user) { showToast('❌ Non autenticato', 'error'); return; }
+
+    // Scarica tutte le tabelle
+    const [rSpese, rEntrate, rCats, rCatsEn] = await Promise.all([
+      _fetchAll('spese',   'data', false),
+      _fetchAll('entrate', 'data', false),
+      _sb.from('categorie').select('*').order('nome'),
+      _sb.from('categorie_entrate').select('*').order('nome')
+    ]);
+    if (rCats.error)   throw rCats.error;
+    if (rCatsEn.error) throw rCatsEn.error;
+
+    // Formatta data: 03/11/26 00:00:00 → MM/DD/YY 00:00:00
+    const fmtData = d => {
+      if (!d) return '';
+      const [y, m, g] = d.split('-');
+      return `${m}/${g}/${y.slice(2)} 00:00:00`;
+    };
+
+    // Dati.txt — Data,Voci di spesa,Importo,Categoria,ID
+    const datoRows = (rSpese || []).map(r =>
+      `"${fmtData(r.data)}","${(r.descrizione||'').replace(/"/g,'""')}",${parseFloat(r.importo||0).toFixed(4)},"${(r.categoria||'').replace(/"/g,'""')}",${r.id}`
+    );
+    const datiCSV = 'Data,Voci di spesa,Importo,Categoria,ID\n' + datoRows.join('\n');
+
+    // Dati Entrate.txt — Data,Voce di incasso,Importo,Categoria entrata,ID
+    const entrateRows = (rEntrate || []).map(r =>
+      `"${fmtData(r.data)}","${(r.descrizione||'').replace(/"/g,'""')}",${parseFloat(r.importo||0).toFixed(4)},"${(r.categoria||'').replace(/"/g,'""')}",${r.id}`
+    );
+    const entrateCSV = 'Data,Voce di incasso,Importo,Categoria entrata,ID\n' + entrateRows.join('\n');
+
+    // Categorie.txt — Categorie
+    const catRows = (rCats.data || []).map(r => `"${(r.nome||'').replace(/"/g,'""')}"`);
+    const catCSV  = 'Categorie\n' + catRows.join('\n');
+
+    // Categorie Entrate.txt — Categorie Entrate
+    const catEnRows = (rCatsEn.data || []).map(r => `"${(r.nome||'').replace(/"/g,'""')}"`);
+    const catEnCSV  = 'Categorie Entrate\n' + catEnRows.join('\n');
+
+    // Crea ZIP
+    const zip  = new JSZip();
+    const bom  = '\uFEFF';
+    zip.file('Dati.txt',             bom + datiCSV);
+    zip.file('Dati Entrate.txt',     bom + entrateCSV);
+    zip.file('Categorie.txt',        bom + catCSV);
+    zip.file('Categorie Entrate.txt',bom + catEnCSV);
+
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `budget-mdb-export-${new Date().toISOString().slice(0,10)}.zip`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+    const tot = (rSpese||[]).length + (rEntrate||[]).length;
+    showToast(`✓ ZIP scaricato — ${tot} record (${(rSpese||[]).length} spese, ${(rEntrate||[]).length} entrate)`, 'success');
+  } catch(e) {
+    showToast('❌ Errore export: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
 }
 
 function updateStatus(source, mdbPath) {
