@@ -2260,15 +2260,15 @@ async function exportMDB() {
 
     // Dati.txt — Data,Voci di spesa,Importo,Categoria,ID
     const datoRows = (rSpese || []).map(r =>
-      `"${fmtData(r.data)}","${(r.descrizione||'').replace(/"/g,'""')}",${parseFloat(r.importo||0).toFixed(4)},"${(r.categoria||'').replace(/"/g,'""')}"`
+      `"${fmtData(r.data)}";"${(r.descrizione||'').replace(/"/g,'""')}";${parseFloat(r.importo||0).toFixed(4).replace('.',',')};"${(r.categoria||'').replace(/"/g,'""')}"`
     );
-    const datiCSV = 'Data,Voci di spesa,Importo,Categoria\n' + datoRows.join('\n');
+    const datiCSV = 'Data;Voci di spesa;Importo;Categoria\n' + datoRows.join('\n');
 
-    // Dati Entrate.txt — Data,Voce di incasso,Importo,Categoria entrata
+    // Dati Entrate.txt — Data;Voce di incasso;Importo;Categoria entrata
     const entrateRows = (rEntrate || []).map(r =>
-      `"${fmtData(r.data)}","${(r.descrizione||'').replace(/"/g,'""')}",${parseFloat(r.importo||0).toFixed(4)},"${(r.categoria||'').replace(/"/g,'""')}"`
+      `"${fmtData(r.data)}";"${(r.descrizione||'').replace(/"/g,'""')}";${parseFloat(r.importo||0).toFixed(4).replace('.',',')};"${(r.categoria||'').replace(/"/g,'""')}"`
     );
-    const entrateCSV = 'Data,Voce di incasso,Importo,Categoria entrata\n' + entrateRows.join('\n');
+    const entrateCSV = 'Data;Voce di incasso;Importo;Categoria entrata\n' + entrateRows.join('\n');
 
     // Categorie.txt — Categorie
     const catRows = (rCats.data || []).map(r => `"${(r.nome||'').replace(/"/g,'""')}"`);
