@@ -2563,7 +2563,7 @@ function init() {
 function _initPullToRefresh() {
   let startY = 0, pulling = false, threshold = 70;
 
-  const pages = ['page-dashboard', 'page-storico'];
+  const pages = ['page-dashboard','page-storico','page-bilancio','page-registra','page-snapshot'];
   pages.forEach(pid => {
     const el = document.getElementById(pid);
     if (!el) return;
@@ -2592,6 +2592,7 @@ function _initPullToRefresh() {
         await loadData();
         _refreshCurrentPage();
         renderCatGrid();
+        if (currentPage === 'snapshot') renderExportStats();
         showToast('✓ Dati aggiornati');
       }
     }, { passive: true });
