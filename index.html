@@ -2255,7 +2255,7 @@ async function exportMDB() {
     const fmtData = d => {
       if (!d) return '';
       const [y, m, g] = d.split('-');
-      return `${m}/${g}/${y} 00:00:00`;
+      return `${g}/${m}/${y} 00:00:00`;
     };
 
     // Dati.txt — Data,Voci di spesa,Importo,Categoria,ID
