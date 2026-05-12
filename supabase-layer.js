@@ -239,7 +239,7 @@ window.budgetAPI = {
       let sbId = (mdbId && mdbId > 0) ? mdbId : 0;
       if (!sbId) {
         const arr = tipo === 'spesa' ? (DB.dati || []) : (DB.datiEntrate || []);
-        const rec = arr.find(r => r.ID === id);
+        const rec = arr.find(r => r.ID == id);  // == per gestire stringa/numero
         sbId = rec ? rec.MdbID : 0;
       }
 

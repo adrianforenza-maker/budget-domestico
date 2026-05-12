@@ -6851,7 +6851,7 @@ function renderSpeseTable() {
       <td>
         <div class="tbl-actions">
           <button class="btn-icon" title="Modifica" onclick="openFormSpesa(${JSON.stringify(r).replace(/"/g,'&quot;')})">✎</button>
-          <button class="btn-icon del" title="Elimina" onclick="event.stopPropagation();deleteRecord('spesa',${r.ID})">✕</button>
+          <button class="btn-icon del" title="Elimina" onclick="event.stopPropagation();deleteRecord('spesa',${r.ID},${r.MdbID||0})">✕</button>
         </div>
       </td>
     </tr>`;
@@ -7064,7 +7064,7 @@ function renderEntrateTable() {
       <td>
         <div class="tbl-actions">
           <button class="btn-icon" title="Modifica" onclick="openFormEntrata(${JSON.stringify(r).replace(/"/g,'&quot;')})">✎</button>
-          <button class="btn-icon del" title="Elimina" onclick="event.stopPropagation();deleteRecord('entrata',${r.ID})">✕</button>
+          <button class="btn-icon del" title="Elimina" onclick="event.stopPropagation();deleteRecord('entrata',${r.ID},${r.MdbID||0})">✕</button>
         </div>
       </td>
     </tr>`;
