@@ -2569,38 +2569,52 @@ function init() {
 function _initPullToRefresh() {
   let startY = 0, pulling = false, threshold = 70;
 
-  // Crea indicatore PTR se non esiste
+  // Crea indicatore PTR se non esiste — posizionato SOTTO la topbar
   if (!document.getElementById('ptr-indicator')) {
     const ptr = document.createElement('div');
     ptr.id = 'ptr-indicator';
-    ptr.innerHTML = '<div class="ptr-spinner"></div>';
+    ptr.innerHTML = `
+      <div class="ptr-spinner"></div>
+      <span class="ptr-label">Aggiornamento...</span>`;
     ptr.style.cssText = `
-      position:fixed;top:0;left:0;right:0;
-      display:flex;align-items:center;justify-content:center;
-      height:48px;background:var(--bg2);
-      transform:translateY(-48px);transition:transform .2s;
-      z-index:9999;border-bottom:1px solid var(--border)`;
+      position:fixed;
+      top:var(--topbar-height, 70px);
+      left:0;right:0;
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      height:36px;
+      background:rgba(79,142,247,.15);
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      border-bottom:1px solid rgba(79,142,247,.3);
+      transform:translateY(-36px);
+      transition:transform .25s ease;
+      z-index:200;`;
     document.body.appendChild(ptr);
 
     const style = document.createElement('style');
     style.textContent = `
       .ptr-spinner {
-        width:22px;height:22px;
-        border:2px solid var(--border);
+        width:16px;height:16px;
+        border:2px solid rgba(79,142,247,.3);
         border-top-color:var(--accent);
         border-radius:50%;
         animation:ptr-spin .7s linear infinite;
+        flex-shrink:0;
+      }
+      .ptr-label {
+        font-size:12px;font-weight:600;color:var(--accent);
       }
       @keyframes ptr-spin { to { transform:rotate(360deg); } }`;
     document.head.appendChild(style);
   }
 
-  const ptrEl = document.getElementById('ptr-indicator');
+  const ptrEl   = document.getElementById('ptr-indicator');
+  const showPtr = (label) => {
+    ptrEl.querySelector('.ptr-label').textContent = label || 'Aggiornamento...';
+    ptrEl.style.transform = 'translateY(0)';
+  };
+  const hidePtr = () => { ptrEl.style.transform = 'translateY(-36px)'; };
 
-  const showPtr = () => { ptrEl.style.transform = 'translateY(0)'; };
-  const hidePtr = () => { ptrEl.style.transform = 'translateY(-48px)'; };
-
-  // Tutte le pagine
   const pages = ['page-dashboard','page-storico','page-bilancio','page-registra','page-snapshot'];
   pages.forEach(pid => {
     const el = document.getElementById(pid);
@@ -2616,7 +2630,7 @@ function _initPullToRefresh() {
       if (dy > 10 && el.scrollTop === 0) {
         el.style.transition = 'none';
         el.style.transform  = `translateY(${Math.min(dy * 0.4, 40)}px)`;
-        if (dy > threshold * 0.5) showPtr();
+        if (dy > threshold * 0.5) showPtr('Rilascia per aggiornare');
       }
     }, { passive: true });
 
@@ -2627,12 +2641,13 @@ function _initPullToRefresh() {
       el.style.transition = 'transform .3s';
       el.style.transform  = '';
       if (dy > threshold) {
-        showPtr();
+        showPtr('Aggiornamento...');
         await loadData();
         _refreshCurrentPage();
         renderCatGrid();
         if (currentPage === 'snapshot') renderExportStats();
-        hidePtr();
+        showPtr('✓ Dati aggiornati');
+        setTimeout(hidePtr, 1200);
       } else {
         hidePtr();
       }
@@ -2681,6 +2696,15 @@ init();
 
 // Init Supabase: script è già caricato (no defer), DOM è pronto
 window.addEventListener('load', async function() {
+  // Calcola altezza topbar per PTR indicator
+  const topbar = document.querySelector('.topbar');
+  if (topbar) {
+    const setTopbarHeight = () => {
+      document.documentElement.style.setProperty('--topbar-height', topbar.offsetHeight + 'px');
+    };
+    setTopbarHeight();
+    window.addEventListener('resize', setTopbarHeight);
+  }
   await sbInit(async () => {
     const ok = await loadData();
     if (ok) {
