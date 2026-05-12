@@ -301,6 +301,7 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
       <div class="progress-fill" id="kpi-bar" style="background:var(--accent);width:0%"></div>
     </div>
     <div class="card-sub" id="kpi-pct">—</div>
+    <div id="dash-modo-toggle" style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:10px;font-size:11px;font-weight:700"></div>
   </div>
 
   <div class="section-hdr">Transazioni del mese</div>
@@ -1230,22 +1231,26 @@ function showPage(page) {
 // ══════════════════════════════════════════
 //  BILANCIO — navigatore anno + toggle Mese/Anno
 // ══════════════════════════════════════════
-let _bilAnno = new Date().getFullYear();
-let _bilMese = new Date().getMonth(); // 0-11
-let _bilMode = 'mese'; // 'mese' | 'anno'
+let _bilAnno = parseInt(localStorage.getItem('bil_anno')) || new Date().getFullYear();
+let _bilMese = parseInt(localStorage.getItem('bil_mese') ?? new Date().getMonth()); // 0-11
+let _bilMode = localStorage.getItem('bil_mode') || 'mese';
 
 function changeAnno(dir) {
   _bilAnno += dir;
+  localStorage.setItem('bil_anno', _bilAnno);
   renderBilancio();
 }
 function changeMeseBil(dir) {
   _bilMese += dir;
   if (_bilMese < 0)  { _bilMese = 11; _bilAnno--; }
   if (_bilMese > 11) { _bilMese = 0;  _bilAnno++; }
+  localStorage.setItem('bil_mese', _bilMese);
+  localStorage.setItem('bil_anno', _bilAnno);
   renderBilancio();
 }
 function setBilMode(mode) {
   _bilMode = mode;
+  localStorage.setItem('bil_mode', mode);
   renderBilancio();
 }
 function setBilModo(modo) {
@@ -1409,6 +1414,23 @@ function renderBilancio() {
       </div>`;
     }).join('');
 
+    // Top categorie anno
+    const catTotAnno = {};
+    _DB.spese.filter(r => r.data.startsWith(_bilAnno.toString())).forEach(r => {
+      if (!catTotAnno[r.catNome]) catTotAnno[r.catNome] = { nome: r.catNome, colore: r.catColore, tot: 0 };
+      catTotAnno[r.catNome].tot += r.importo;
+    });
+    const topCatAnno = Object.values(catTotAnno).sort((a,b) => b.tot-a.tot).slice(0,10);
+    const topCatAnnoHtml = topCatAnno.map(c => {
+      const pct = totSp > 0 ? Math.round(c.tot/totSp*100) : 0;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="width:9px;height:9px;border-radius:50%;background:${c.colore};flex-shrink:0"></div>
+        <div style="flex:1;font-size:13px">${c.nome}</div>
+        <div style="font-size:11px;color:var(--t3)">${pct}%</div>
+        <div style="font-size:13px;font-weight:700;color:var(--red)">€ ${eur(c.tot)}</div>
+      </div>`;
+    }).join('');
+
     el.innerHTML = navHtml + toggleModeHtml + toggleEntrateHtml + `
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">
@@ -1432,7 +1454,7 @@ function renderBilancio() {
           <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--red);border-radius:2px"></div>Uscite</div>
         </div>
       </div>
-      <div class="card">
+      <div class="card" style="margin-bottom:12px">
         <div style="display:flex;font-size:10px;color:var(--t3);font-weight:700;margin-bottom:4px;gap:8px">
           <div style="width:28px"></div>
           <div style="flex:1">Entrate</div>
@@ -1440,7 +1462,11 @@ function renderBilancio() {
           <div>Saldo</div>
         </div>
         ${righeHtml}
-      </div>`;
+      </div>
+      ${topCatAnno.length ? `<div class="card">
+        <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE ${_bilAnno}</div>
+        ${topCatAnnoHtml}
+      </div>` : ''}`;
   }
 }
 
@@ -1469,15 +1495,25 @@ function changeMonthSt(dir) {
 function renderDashboard() {
   if (!_dbLoaded) { return; }
 
+  const modo = localStorage.getItem('bilModoEntrate') || 'prec';
+
   const spMese   = _DB.spese.filter(r => r.data.startsWith(currentMonth));
   const enMese   = _DB.entrate.filter(r => r.data.startsWith(currentMonth));
   const totSp    = spMese.reduce((s,r) => s+r.importo, 0);
-  const totEn    = enMese.reduce((s,r) => s+r.importo, 0);
-  const saldo    = totEn - totSp;
-  const pct      = totEn > 0 ? Math.min(100, (saldo/totEn)*100) : 0;
+  const totEnCurr= enMese.reduce((s,r) => s+r.importo, 0);
+
+  // Entrate mese precedente per modalità "Mese Prec."
+  const [cy, cm] = currentMonth.split('-').map(Number);
+  const prevDate = new Date(cy, cm-2, 1);
+  const prevYM   = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
+  const enPrec   = _DB.entrate.filter(r => r.data.startsWith(prevYM)).reduce((s,r) => s+r.importo, 0);
+
+  const totEn  = modo === 'prec' ? enPrec : totEnCurr;
+  const saldo  = totEn - totSp;
+  const pct    = totEn > 0 ? Math.min(100, (saldo/totEn)*100) : 0;
 
   document.getElementById('month-label').textContent = fmtMonth(currentMonth);
-  document.getElementById('kpi-en').textContent  = '€ ' + eur(totEn);
+  document.getElementById('kpi-en').textContent  = '€ ' + eur(totEnCurr);
   document.getElementById('kpi-sp').textContent  = '€ ' + eur(totSp);
   const sEl = document.getElementById('kpi-saldo');
   sEl.textContent = (saldo<0?'-':'') + '€ ' + eur(Math.abs(saldo));
@@ -1486,10 +1522,21 @@ function renderDashboard() {
   document.getElementById('kpi-bar').style.background = pct >= 20 ? 'var(--green)' : pct >= 0 ? 'var(--amber)' : 'var(--red)';
   document.getElementById('kpi-pct').textContent      = pct.toFixed(1) + '% di risparmio';
 
-  // Transazioni recenti del mese
-  const el  = document.getElementById('recent-list');
-  const allTx = _recordsOfMonth(currentMonth).slice(0, 30);
+  // Toggle Mese Prec. / Stesso Mese
+  const toggleEl = document.getElementById('dash-modo-toggle');
+  if (toggleEl) {
+    toggleEl.innerHTML = `
+      <button onclick="setDashModo('prec')" style="flex:1;padding:7px;border:none;cursor:pointer;border-radius:8px 0 0 8px;font-size:11px;font-weight:700;background:${modo==='prec'?'var(--accent)':'transparent'};color:${modo==='prec'?'#fff':'var(--t3)'}">📅 Mese Prec.</button>
+      <button onclick="setDashModo('corrente')" style="flex:1;padding:7px;border:none;cursor:pointer;border-radius:0 8px 8px 0;font-size:11px;font-weight:700;background:${modo==='corrente'?'var(--green)':'transparent'};color:${modo==='corrente'?'#fff':'var(--t3)'}">📆 Stesso Mese</button>`;
+  }
 
+  // Topbar
+  const total = _DB.spese.length + _DB.entrate.length;
+  document.getElementById('topbar-sub').textContent = `${total} record · ☁ Supabase`;
+
+  // Transazioni del mese
+  const el  = document.getElementById('recent-list');
+  const allTx = _recordsOfMonth(currentMonth);
   if (!allTx.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>';
   } else {
@@ -1506,10 +1553,12 @@ function renderDashboard() {
       </div>`;
     }).join('');
   }
+}
 
-  // Topbar
-  const total = _DB.spese.length + _DB.entrate.length;
-  document.getElementById('topbar-sub').textContent = `${total} record · ☁ Supabase`;
+function setDashModo(modo) {
+  localStorage.setItem('bilModoEntrate', modo);
+  renderDashboard();
+  if (currentPage === 'bilancio') renderBilancio();
 }
 
 function toggleDel(el) {
