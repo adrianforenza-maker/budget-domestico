@@ -35,7 +35,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Budget Domestico v2.1</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="supabase-layer.js"></script>
 <script>
 
@@ -423,7 +422,7 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="sbRestoreDB(event)">
     <button class="titlebar-btn" onclick="exportSettings()" style="background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.4);color:#14b8a6" title="Scarica backup impostazioni localStorage">⬇ Settings</button>
     <button class="titlebar-btn" onclick="document.getElementById('settings-import-input').click()" style="background:rgba(251,146,60,.12);border-color:rgba(251,146,60,.4);color:#fb923c" title="Ripristina impostazioni localStorage">⬆ Settings</button>
-    <button class="titlebar-btn" onclick="exportMDB()" style="background:rgba(245,101,101,.12);border-color:rgba(245,101,101,.4);color:#f56565" title="Esporta 4 CSV nel formato Access (ZIP)">⬇ MDB Export</button>
+    
     <input type="file" id="settings-import-input" accept=".json" style="display:none" onchange="importSettings(event)">
     <input type="file" id="imp-json-input" accept=".json" style="display:none">
   </div>
@@ -2255,7 +2254,7 @@ async function exportMDB() {
     const fmtData = d => {
       if (!d) return '';
       const [y, m, g] = d.split('-');
-      return `${g}/${m}/${y}`;
+      return `${m}/${g}/${y} 00:00:00`;
     };
 
     // Dati.txt — Data,Voci di spesa,Importo,Categoria,ID
