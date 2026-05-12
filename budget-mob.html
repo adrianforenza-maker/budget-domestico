@@ -79,7 +79,7 @@ body {
 .nav-item svg { width: 22px; height: 22px; }
 
 /* ── PAGES ── */
-.page { display: none; padding: 20px 16px 0; animation: fadeIn .2s ease; }
+.page { display: none; padding: 20px 16px 0; animation: fadeIn .2s ease; overflow-y: auto; }
 .page.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
@@ -260,30 +260,9 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-/* ── PULL TO REFRESH ── */
-#ptr-indicator {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  height: 0; overflow: hidden;
-  background: rgba(13,15,26,.95);
-  font-size: 13px; font-weight: 600; color: var(--t2);
-  transition: height .2s ease;
-}
-#ptr-indicator.visible { height: 54px; }
-#ptr-spinner {
-  width: 18px; height: 18px;
-  border: 2px solid var(--bg4);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin .7s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
-
-<!-- PULL TO REFRESH -->
-<div id="ptr-indicator"><div id="ptr-spinner"></div><span id="ptr-label">Aggiornamento...</span></div>
 
 <!-- TOP BAR -->
 <div class="topbar">
@@ -291,7 +270,7 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
     <div class="topbar-title">💰 Budget Domestico</div>
     <div class="topbar-sub" id="topbar-sub">Caricamento...</div>
   </div>
-  <button class="topbar-sync" onclick="showPage('export')">⬆ Esporta</button>
+
 </div>
 
 <!-- PAGES -->
@@ -422,53 +401,38 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
   </div>
 </div>
 
-<!-- SNAPSHOT (dati da PC) -->
+<!-- SNAPSHOT / PC SYNC -->
 <div class="page" id="page-snapshot">
-  <div id="snapshot-content">
-    <div class="export-card" style="background:linear-gradient(135deg,rgba(30,207,150,.12),rgba(79,142,247,.08));border-color:rgba(30,207,150,.3)">
-      <div style="font-size:16px;font-weight:700;margin-bottom:6px">☁ PC Sync</div>
-      <div style="font-size:13px;color:var(--t2);line-height:1.5">Sincronizza i dati dal cloud Supabase per aggiornare il bilancio su tutti i dispositivi.</div>
-    </div>
-    <button class="btn btn-primary" onclick="sbSyncNow()" style="margin-bottom:12px">☁ Sync da Supabase</button>
-    <div id="snapshot-hint" class="card" style="font-size:13px;color:var(--t2);line-height:1.7">
-      <b style="color:var(--t1)">Come funziona il Sync Supabase:</b><br>
-      1. Premi <b style="color:var(--green)">☁ Sync</b> → i dati vengono scaricati dal cloud<br>
-      2. Tutti i record inseriti da qualsiasi dispositivo appaiono qui automaticamente<br>
-      3. I nuovi record inseriti sull'iPhone vengono salvati direttamente su Supabase
-    </div>
+  <div class="export-card" style="background:linear-gradient(135deg,rgba(30,207,150,.12),rgba(79,142,247,.08));border-color:rgba(30,207,150,.3);margin-bottom:16px">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">☁ Supabase Sync</div>
+    <div style="font-size:13px;color:var(--t2);line-height:1.5">Scarica i dati aggiornati dal cloud. Tutti i dispositivi condividono gli stessi dati in tempo reale.</div>
   </div>
+  <button class="btn btn-primary" id="sb-sync-now-btn" onclick="sbSyncNow()" style="margin-bottom:12px">☁ Sincronizza ora</button>
+  <div class="card" id="sb-status-card-snap" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:16px">
+    <span id="sb-status-txt-snap">Verifica connessione...</span>
+  </div>
+  <button class="btn btn-ghost" id="sb-logout-btn-snap" onclick="sbLogoutMobile()" style="display:none">🔓 Disconnetti account</button>
 </div>
 
 <!-- EXPORT -->
 <div class="page" id="page-export">
 
   <!-- Riepilogo DB -->
-  <div class="card" id="export-stats"></div>
+  <div class="card" id="export-stats" style="margin-bottom:16px"></div>
 
-  <!-- CSV da Supabase -->
+  <!-- CSV Spese da Supabase -->
   <div class="section-hdr">⬇ Esporta CSV</div>
+  <button class="btn btn-primary" onclick="exportCSVSupabase('spese')" style="margin-bottom:8px">⬇ CSV Spese</button>
+  <button class="btn btn-primary" onclick="exportCSVSupabase('entrate')" style="background:var(--green);color:#1e2235;margin-bottom:20px">⬇ CSV Entrate</button>
+
+  <!-- Spese Rapide -->
+  <div class="section-hdr">⚡ Spese Rapide</div>
   <div class="card" style="font-size:13px;color:var(--t2);line-height:1.5;margin-bottom:12px">
-    Scarica tutte le spese o entrate da Supabase in formato CSV, leggibile in Excel.
+    Salva e ripristina le spese rapide su qualsiasi dispositivo o browser.
   </div>
-  <button class="btn btn-primary" onclick="exportCSV('spese')" style="margin-bottom:8px">⬇ CSV Spese</button>
-  <button class="btn btn-primary" onclick="exportCSV('entrate')" style="margin-bottom:20px">⬇ CSV Entrate</button>
-
-  <!-- Backup spese rapide -->
-  <div class="section-hdr">⚡ Backup Spese Rapide</div>
-  <div class="card" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:12px">
-    Salva le tue spese rapide in un file JSON per non perderle mai quando cambi browser o dispositivo.
-  </div>
-  <button class="btn btn-ghost" onclick="exportQuickBackup()" style="margin-bottom:8px">💾 Salva backup spese rapide</button>
-  <button class="btn btn-ghost" onclick="document.getElementById('quick-backup-input').click()" style="margin-bottom:20px">📂 Ripristina spese rapide</button>
+  <button class="btn btn-ghost" onclick="exportQuickBackup()" style="margin-bottom:8px">💾 Backup spese rapide</button>
+  <button class="btn btn-ghost" onclick="document.getElementById('quick-backup-input').click()" style="margin-bottom:20px">📥 Importa spese rapide</button>
   <input type="file" id="quick-backup-input" accept=".json" style="display:none" onchange="importQuickBackup(event)">
-
-  <!-- Supabase login/logout -->
-  <div class="section-hdr" style="margin-top:4px">☁ Account Supabase</div>
-  <div class="card" id="sb-status-card" style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:12px">
-    <span id="sb-status-txt">Verifica connessione...</span>
-  </div>
-  <button class="btn btn-primary" id="sb-connect-btn" onclick="sbSyncNow()" style="margin-bottom:8px">🔄 Sincronizza ora</button>
-  <button class="btn btn-ghost" id="sb-logout-btn" onclick="sbLogoutMobile()" style="margin-bottom:20px;display:none">🔓 Disconnetti account</button>
 
 </div>
 
@@ -1229,7 +1193,6 @@ let currentType = 'sp';
 let amountStr   = '';
 let selectedCat = null;
 let currentMonth, currentMonthSt;
-let bilAnno     = new Date().getFullYear();
 
 function today() {
   const d = new Date();
@@ -1264,13 +1227,40 @@ function showPage(page) {
 // ══════════════════════════════════════════
 //  BILANCIO (da snapshot PC)
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+//  BILANCIO — navigatore anno + toggle Mese/Anno
+// ══════════════════════════════════════════
+let _bilAnno = new Date().getFullYear();
+let _bilMese = new Date().getMonth(); // 0-11
+let _bilMode = 'mese'; // 'mese' | 'anno'
+
+function changeAnno(dir) {
+  _bilAnno += dir;
+  renderBilancio();
+}
+function changeMeseBil(dir) {
+  _bilMese += dir;
+  if (_bilMese < 0)  { _bilMese = 11; _bilAnno--; }
+  if (_bilMese > 11) { _bilMese = 0;  _bilAnno++; }
+  renderBilancio();
+}
+function setBilMode(mode) {
+  _bilMode = mode;
+  renderBilancio();
+}
+function setBilModo(modo) {
+  localStorage.setItem('bilModoEntrate', modo);
+  renderBilancio();
+}
+
 function renderBilancio() {
   if (!_dbLoaded) return;
   const el   = document.getElementById('bilancio-content');
   const mesi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
-  let modo   = localStorage.getItem('bilModoEntrate') || 'prec';
+  const now  = new Date();
+  const modo = localStorage.getItem('bilModoEntrate') || 'prec';
 
-  // ── Calcola mesi aggregati da _DB ──────────────────────────────
+  // Costruisci monthMap da _DB
   const monthMap = {};
   [..._DB.spese, ..._DB.entrate].forEach(r => {
     const ymR = r.data.slice(0,7);
@@ -1279,204 +1269,183 @@ function renderBilancio() {
     if (r.tipo === 'entrata') monthMap[ymR].entrate += r.importo;
   });
   const allMonths = Object.values(monthMap).sort((a,b) => a.ym.localeCompare(b.ym));
-
-  if (!allMonths.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Nessun dato disponibile</div></div>';
-    return;
-  }
-
-  // ── Anno corrente e anni disponibili ──────────────────────────
-  const nowYear  = new Date().getFullYear();
-  const nowMonth = new Date().getMonth(); // 0-based
-  const availableYears = [...new Set(allMonths.map(m => parseInt(m.ym.slice(0,4))))].sort();
-  // Assicura bilAnno sia in range
-  if (!availableYears.includes(bilAnno)) bilAnno = nowYear;
-
-  const prevYear = availableYears[availableYears.indexOf(bilAnno) - 1];
-  const nextYear = availableYears[availableYears.indexOf(bilAnno) + 1];
-
-  // ── Filtro mesi anno selezionato (anno corrente: fino al mese corrente) ──
-  const annoStr = bilAnno.toString();
-  let mesiAnnoAll = allMonths.filter(m => m.ym.startsWith(annoStr));
-  // Per l'anno corrente mostra solo fino al mese in corso
-  if (bilAnno === nowYear) {
-    const limYM = `${nowYear}-${String(nowMonth+1).padStart(2,'0')}`;
-    mesiAnnoAll = mesiAnnoAll.filter(m => m.ym <= limYM);
-  }
-
-  // ── Calcola entratePrec per tutti i mesi (usando tutti, non solo anno corrente) ──
   allMonths.forEach((m, i) => {
     m.entratePrec = i === 0 ? m.entrate : allMonths[i-1].entrate;
     m.ymPrec      = i === 0 ? null : allMonths[i-1].ym;
-    m.saldo    = m.entrate - m.spese;
-    m.saldoBil = m.entratePrec - m.spese;
+    m.saldo       = m.entrate - m.spese;
+    m.saldoBil    = m.entratePrec - m.spese;
   });
-
   const getSaldo = m => modo === 'prec' ? m.saldoBil : m.saldo;
   const getEn    = m => modo === 'prec' ? m.entratePrec : m.entrate;
-  const getEnLbl = m => {
-    if (modo !== 'prec') return mesi[parseInt(m.ym.split('-')[1])-1];
-    if (m.ymPrec) return mesi[parseInt(m.ymPrec.split('-')[1])-1] + ' ' + m.ymPrec.split('-')[0];
-    return 'Prec.';
-  };
 
-  // ── YTD anno selezionato ───────────────────────────────────────
-  const ytdEntrate = mesiAnnoAll.reduce((s,m) => s + getEn(m), 0);
-  const ytdSpese   = mesiAnnoAll.reduce((s,m) => s + m.spese, 0);
-  const ytdSaldo   = mesiAnnoAll.reduce((s,m) => s + getSaldo(m), 0);
-
-  // ── Grafico: tutti i mesi dell'anno selezionato (max 12) ──────
-  const barsData = mesiAnnoAll;
-  const maxVal   = Math.max(...barsData.map(m => Math.max(getEn(m), m.spese)), 1);
-  const bars = barsData.map(m => {
-    const [,mo] = m.ym.split('-');
-    const label = mesi[parseInt(mo)-1];
-    const hSp   = Math.round((m.spese/maxVal)*60);
-    const hEn   = Math.round((getEn(m)/maxVal)*60);
-    const sal   = getSaldo(m);
-    const sColor = sal >= 0 ? 'var(--green)' : 'var(--red)';
-    const sVal  = Math.abs(sal) >= 1000
-      ? (sal<0?'-':'')+(Math.abs(sal)/1000).toFixed(1)+'k'
-      : Math.round(sal);
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
-      <div style="font-size:9px;color:var(--t3);font-weight:700">${label}</div>
-      <div style="display:flex;gap:2px;align-items:flex-end;height:64px">
-        <div style="width:10px;height:${hEn}px;background:var(--green);border-radius:3px 3px 0 0;opacity:.85"></div>
-        <div style="width:10px;height:${hSp}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.85"></div>
-      </div>
-      <div style="font-size:9px;color:${sColor};font-weight:700">${sVal}</div>
+  // Toggle Mese/Anno
+  const toggleModeHtml = `
+    <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;font-size:12px;font-weight:700">
+      <button onclick="setBilMode('mese')" style="flex:1;padding:9px;border:none;cursor:pointer;background:${_bilMode==='mese'?'var(--accent)':'transparent'};color:${_bilMode==='mese'?'#fff':'var(--t3)'}">📅 Mese</button>
+      <button onclick="setBilMode('anno')" style="flex:1;padding:9px;border:none;cursor:pointer;background:${_bilMode==='anno'?'var(--purple)':'transparent'};color:${_bilMode==='anno'?'#fff':'var(--t3)'}">📆 Anno</button>
     </div>`;
-  }).join('');
 
-  // ── Mese più recente dell'anno selezionato ────────────────────
-  const lastM     = mesiAnnoAll.at(-1);
-  const lastSal   = lastM ? getSaldo(lastM) : 0;
-  const lastEn    = lastM ? getEn(lastM) : 0;
-  const lastEnLbl = lastM ? getEnLbl(lastM) : '';
-  const bilCol    = lastSal >= 0 ? 'var(--green)' : 'var(--red)';
-  const lastMLabel = lastM ? `${mesi[parseInt(lastM.ym.split('-')[1])-1]} ${lastM.ym.split('-')[0]}` : '';
+  // Toggle entrate Prec/Corrente
+  const toggleEntrateHtml = `
+    <div style="display:flex;gap:0;border:1px solid rgba(255,255,255,.1);border-radius:8px;overflow:hidden;margin-bottom:14px;font-size:11px;font-weight:700">
+      <button onclick="setBilModo('prec')" style="flex:1;padding:7px;border:none;cursor:pointer;background:${modo==='prec'?'var(--accent)':'transparent'};color:${modo==='prec'?'#fff':'var(--t3)'}">📅 Mese Prec.</button>
+      <button onclick="setBilModo('corrente')" style="flex:1;padding:7px;border:none;cursor:pointer;background:${modo==='corrente'?'var(--green)':'transparent'};color:${modo==='corrente'?'#fff':'var(--t3)'}">📆 Stesso Mese</button>
+    </div>`;
 
-  // ── Top categorie anno selezionato ────────────────────────────
-  const catTotMap = {};
-  _DB.spese.filter(r => r.data.startsWith(annoStr) && (bilAnno !== nowYear || r.data.slice(0,7) <= `${nowYear}-${String(nowMonth+1).padStart(2,'0')}`))
-    .forEach(r => {
-      if (!catTotMap[r.catNome]) catTotMap[r.catNome] = { nome: r.catNome, colore: r.catColore, totale: 0 };
-      catTotMap[r.catNome].totale += r.importo;
+  if (_bilMode === 'mese') {
+    // ── VISTA MESE ─────────────────────────────────────────────
+    const ymSel  = `${_bilAnno}-${String(_bilMese+1).padStart(2,'0')}`;
+    const mData  = allMonths.find(m => m.ym === ymSel);
+    const navHtml = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <button onclick="changeMeseBil(-1)" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--t2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>
+        <span style="font-size:16px;font-weight:700">${mesi[_bilMese]} ${_bilAnno}</span>
+        <button onclick="changeMeseBil(1)" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--t2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>
+      </div>`;
+
+    if (!mData) {
+      el.innerHTML = navHtml + toggleModeHtml + toggleEntrateHtml +
+        '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessun dato per questo mese</div></div>';
+      return;
+    }
+
+    const enVal  = getEn(mData);
+    const spVal  = mData.spese;
+    const salVal = getSaldo(mData);
+    const salCol = salVal >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Top categorie del mese
+    const catTot = {};
+    _DB.spese.filter(r => r.data.startsWith(ymSel)).forEach(r => {
+      if (!catTot[r.catNome]) catTot[r.catNome] = { nome: r.catNome, colore: r.catColore, tot: 0 };
+      catTot[r.catNome].tot += r.importo;
     });
-  const topCatSorted = Object.values(catTotMap).sort((a,b) => b.totale-a.totale).slice(0,10);
-  const topCatHtml   = topCatSorted.map(c => {
-    const pct = ytdSpese > 0 ? Math.round(c.totale/ytdSpese*100) : 0;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="width:10px;height:10px;border-radius:50%;background:${c.colore};flex-shrink:0"></div>
-      <div style="flex:1;font-size:13px">${c.nome}</div>
-      <div style="font-size:12px;color:var(--t3)">${pct}%</div>
-      <div style="font-size:13px;font-weight:700;color:var(--red)">€ ${eur(c.totale)}</div>
-    </div>`;
-  }).join('');
+    const topCat = Object.values(catTot).sort((a,b) => b.tot-a.tot).slice(0,8);
+    const topCatHtml = topCat.map(c => {
+      const pct = spVal > 0 ? Math.round(c.tot/spVal*100) : 0;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="width:9px;height:9px;border-radius:50%;background:${c.colore};flex-shrink:0"></div>
+        <div style="flex:1;font-size:13px">${c.nome}</div>
+        <div style="font-size:11px;color:var(--t3)">${pct}%</div>
+        <div style="font-size:13px;font-weight:700;color:var(--red)">€ ${eur(c.tot)}</div>
+      </div>`;
+    }).join('');
 
-  // ── Toggle modo entrate ───────────────────────────────────────
-  const toggleHtml = `
-    <div style="display:flex;gap:0;border:1px solid rgba(255,255,255,.15);border-radius:8px;overflow:hidden;margin-bottom:14px;font-size:12px;font-weight:700">
-      <button onclick="setBilModo('prec')"
-        style="flex:1;padding:8px;border:none;cursor:pointer;transition:all .15s;background:${modo==='prec'?'var(--accent)':'transparent'};color:${modo==='prec'?'#fff':'var(--t3)'}">
-        📅 Mese Prec.
-      </button>
-      <button onclick="setBilModo('corrente')"
-        style="flex:1;padding:8px;border:none;cursor:pointer;transition:all .15s;background:${modo==='corrente'?'var(--green)':'transparent'};color:${modo==='corrente'?'#fff':'var(--t3)'}">
-        📆 Stesso Mese
-      </button>
-    </div>`;
-
-  // ── Navigatore anno ───────────────────────────────────────────
-  const isCurrentYear = bilAnno === nowYear;
-  const annoLabel = isCurrentYear ? `${bilAnno} (in corso)` : bilAnno.toString();
-  const yearNavHtml = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;background:var(--bg3);border-radius:12px;padding:10px 12px">
-      <button onclick="setBilAnno(${prevYear ?? bilAnno})" style="background:none;border:none;color:${prevYear?'var(--accent)':'var(--bg4)'};font-size:22px;cursor:${prevYear?'pointer':'default'};padding:0 4px;line-height:1">‹</button>
-      <div style="text-align:center">
-        <div style="font-size:18px;font-weight:800;color:var(--t1)">${bilAnno}</div>
-        ${isCurrentYear ? `<div style="font-size:10px;color:var(--accent);font-weight:600">Anno in corso · fino a ${mesi[nowMonth]}</div>` : `<div style="font-size:10px;color:var(--t3)">Anno solare completo</div>`}
-      </div>
-      <button onclick="setBilAnno(${nextYear ?? bilAnno})" style="background:none;border:none;color:${nextYear?'var(--accent)':'var(--bg4)'};font-size:22px;cursor:${nextYear?'pointer':'default'};padding:0 4px;line-height:1">›</button>
-    </div>`;
-
-  const annoRiepilogoLabel = isCurrentYear
-    ? `${annoStr} — GEN › ${mesi[nowMonth].toUpperCase()}`
-    : `${annoStr} — ANNO COMPLETO`;
-
-  el.innerHTML = `
-    ${yearNavHtml}
-    ${toggleHtml}
-
-    <div class="card" style="margin-bottom:12px">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">${annoRiepilogoLabel}</div>
-      <div style="display:flex;gap:8px">
-        <div style="flex:1;text-align:center">
+    el.innerHTML = navHtml + toggleModeHtml + toggleEntrateHtml + `
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">
           <div style="font-size:10px;color:var(--t3)">Entrate</div>
-          <div style="font-size:16px;font-weight:800;color:var(--green)">€ ${ytdEntrate>=1000?(ytdEntrate/1000).toFixed(1)+'k':eur(ytdEntrate)}</div>
+          <div style="font-size:17px;font-weight:800;color:var(--green)">€ ${eur(enVal)}</div>
         </div>
-        <div style="flex:1;text-align:center">
+        <div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">
           <div style="font-size:10px;color:var(--t3)">Uscite</div>
-          <div style="font-size:16px;font-weight:800;color:var(--red)">€ ${ytdSpese>=1000?(ytdSpese/1000).toFixed(1)+'k':eur(ytdSpese)}</div>
+          <div style="font-size:17px;font-weight:800;color:var(--red)">€ ${eur(spVal)}</div>
         </div>
-        <div style="flex:1;text-align:center">
+      </div>
+      <div class="card" style="text-align:center;margin-bottom:12px">
+        <div style="font-size:10px;color:var(--t3);margin-bottom:4px">SALDO</div>
+        <div style="font-size:28px;font-weight:800;color:${salCol}">${salVal<0?'-':''}€ ${eur(Math.abs(salVal))}</div>
+      </div>
+      ${topCat.length ? `<div class="card"><div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE</div>${topCatHtml}</div>` : ''}`;
+
+  } else {
+    // ── VISTA ANNO ─────────────────────────────────────────────
+    const nowY = now.getFullYear();
+    const nowM = now.getMonth(); // 0-11
+    const annoMesi = allMonths.filter(m => m.ym.startsWith(_bilAnno.toString()));
+    // Se anno corrente mostra solo fino al mese corrente
+    const mesiVisibili = _bilAnno === nowY
+      ? annoMesi.filter(m => parseInt(m.ym.split('-')[1])-1 <= nowM)
+      : annoMesi;
+
+    const navHtml = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <button onclick="changeAnno(-1)" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--t2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>
+        <span style="font-size:16px;font-weight:700">${_bilAnno}</span>
+        <button onclick="changeAnno(1)" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--t2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>
+      </div>`;
+
+    if (!mesiVisibili.length) {
+      el.innerHTML = navHtml + toggleModeHtml + toggleEntrateHtml +
+        '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessun dato per questo anno</div></div>';
+      return;
+    }
+
+    const totEn  = mesiVisibili.reduce((s,m) => s+getEn(m), 0);
+    const totSp  = mesiVisibili.reduce((s,m) => s+m.spese, 0);
+    const totSal = mesiVisibili.reduce((s,m) => s+getSaldo(m), 0);
+    const salCol = totSal >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Barre mensili anno
+    const maxV = Math.max(...mesiVisibili.map(m => Math.max(getEn(m), m.spese)), 1);
+    const barsHtml = mesiVisibili.map(m => {
+      const mo    = parseInt(m.ym.split('-')[1]);
+      const label = mesi[mo-1];
+      const hEn   = Math.round((getEn(m)/maxV)*56);
+      const hSp   = Math.round((m.spese/maxV)*56);
+      const sal   = getSaldo(m);
+      const sCol  = sal >= 0 ? 'var(--green)' : 'var(--red)';
+      const sLbl  = Math.abs(sal)>=1000 ? (sal<0?'-':'')+(Math.abs(sal)/1000).toFixed(1)+'k' : Math.round(sal);
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="font-size:8px;color:var(--t3);font-weight:700">${label}</div>
+        <div style="display:flex;gap:2px;align-items:flex-end;height:60px">
+          <div style="width:9px;height:${hEn}px;background:var(--green);border-radius:3px 3px 0 0;opacity:.85"></div>
+          <div style="width:9px;height:${hSp}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.85"></div>
+        </div>
+        <div style="font-size:8px;color:${sCol};font-weight:700">${sLbl}</div>
+      </div>`;
+    }).join('');
+
+    // Riga mesi dettaglio
+    const righeHtml = mesiVisibili.map(m => {
+      const mo  = parseInt(m.ym.split('-')[1]);
+      const sal = getSaldo(m);
+      const sCol = sal >= 0 ? 'var(--green)' : 'var(--red)';
+      return `<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--t2);width:28px">${mesi[mo-1]}</div>
+        <div style="flex:1;font-size:12px;color:var(--green)">€ ${eur(getEn(m))}</div>
+        <div style="flex:1;font-size:12px;color:var(--red)">€ ${eur(m.spese)}</div>
+        <div style="font-size:12px;font-weight:700;color:${sCol}">${sal<0?'-':''}€ ${eur(Math.abs(sal))}</div>
+      </div>`;
+    }).join('');
+
+    el.innerHTML = navHtml + toggleModeHtml + toggleEntrateHtml + `
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:var(--t3)">Entrate</div>
+          <div style="font-size:15px;font-weight:800;color:var(--green)">€ ${totEn>=1000?(totEn/1000).toFixed(1)+'k':eur(totEn)}</div>
+        </div>
+        <div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:var(--t3)">Uscite</div>
+          <div style="font-size:15px;font-weight:800;color:var(--red)">€ ${totSp>=1000?(totSp/1000).toFixed(1)+'k':eur(totSp)}</div>
+        </div>
+        <div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">
           <div style="font-size:10px;color:var(--t3)">Saldo</div>
-          <div style="font-size:16px;font-weight:800;color:${ytdSaldo>=0?'var(--green)':'var(--red)'}">
-            ${ytdSaldo<0?'-':''}€ ${Math.abs(ytdSaldo)>=1000?(Math.abs(ytdSaldo)/1000).toFixed(1)+'k':eur(Math.abs(ytdSaldo))}</div>
+          <div style="font-size:15px;font-weight:800;color:${salCol}">${totSal<0?'-':''}€ ${Math.abs(totSal)>=1000?(Math.abs(totSal)/1000).toFixed(1)+'k':eur(Math.abs(totSal))}</div>
         </div>
       </div>
-    </div>
-
-    ${barsData.length ? `
-    <div class="card" style="margin-bottom:12px">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:10px">MESE PER MESE — ${annoStr}</div>
-      <div style="display:flex;gap:2px;align-items:flex-end;overflow-x:auto;padding-bottom:4px">${bars}</div>
-      <div style="display:flex;gap:8px;margin-top:8px;justify-content:center;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--green);border-radius:2px"></div>${modo==='prec'?'Entr. rif.':'Entrate'}</div>
-        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--red);border-radius:2px"></div>Uscite</div>
-      </div>
-    </div>` : ''}
-
-    ${lastM ? `
-    <div class="card" style="margin-bottom:12px">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:8px">
-        MESE PIÙ RECENTE — ${lastMLabel}
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--t3)">Entr. rif. (${lastEnLbl})</div>
-          <div style="font-size:15px;font-weight:800;color:var(--green)">€ ${eur(lastEn)}</div>
-        </div>
-        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--t3)">Uscite</div>
-          <div style="font-size:15px;font-weight:800;color:var(--red)">€ ${eur(lastM.spese)}</div>
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--t3);font-weight:700;margin-bottom:10px">ANDAMENTO MENSILE ${_bilAnno}</div>
+        <div style="display:flex;gap:3px;align-items:flex-end;overflow-x:auto">${barsHtml}</div>
+        <div style="display:flex;gap:10px;margin-top:8px;justify-content:center">
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--green);border-radius:2px"></div>Entrate</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t3)"><div style="width:8px;height:8px;background:var(--red);border-radius:2px"></div>Uscite</div>
         </div>
       </div>
-      <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--t3);margin-bottom:2px">BILANCIO</div>
-        <div style="font-size:22px;font-weight:800;color:${bilCol}">${lastSal<0?'-':''}€ ${eur(Math.abs(lastSal))}</div>
-      </div>
-    </div>` : ''}
-
-    ${topCatSorted.length ? `
-    <div class="card">
-      <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.05em;margin-bottom:4px">TOP CATEGORIE — ${annoStr}</div>
-      ${topCatHtml}
-    </div>` : ''}`;
+      <div class="card">
+        <div style="display:flex;font-size:10px;color:var(--t3);font-weight:700;margin-bottom:4px;gap:8px">
+          <div style="width:28px"></div>
+          <div style="flex:1">Entrate</div>
+          <div style="flex:1">Uscite</div>
+          <div>Saldo</div>
+        </div>
+        ${righeHtml}
+      </div>`;
+  }
 }
 
-function setBilModo(modo) {
-  localStorage.setItem('bilModoEntrate', modo);
-  renderBilancio();
-}
 
-function setBilAnno(anno) {
-  bilAnno = parseInt(anno);
-  renderBilancio();
-}
 
-// ══════════════════════════════════════════
-//  DASHBOARD
 // ══════════════════════════════════════════
 function initMonth() {
   const d = new Date();
@@ -2228,62 +2197,108 @@ function renderSnapshot() {
 function renderExportStats() {
   const el = document.getElementById('export-stats');
   if (!el) return;
-  const nSpese     = _DB.spese.length;
-  const nEntrate   = _DB.entrate.length;
-  const nCatSp     = (_DB.categorie?.spese || []).length;
-  const nCatEn     = (_DB.categorie?.entrate || []).length;
+  const nSp  = _DB.spese.length;
+  const nEn  = _DB.entrate.length;
+  const nCs  = _DB.categorie.spese.length;
+  const nCe  = _DB.categorie.entrate.length;
   el.innerHTML = `
-    <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:10px">📊 Riepilogo database</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:var(--bg3);border-radius:10px;padding:10px 12px">
-        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Spese</div>
-        <div style="font-size:20px;font-weight:800;color:var(--red)">${nSpese.toLocaleString('it')}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">☁ Riepilogo Database</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--t3)">Spese</div>
+        <div style="font-size:22px;font-weight:800;color:var(--red)">${nSp}</div>
       </div>
-      <div style="background:var(--bg3);border-radius:10px;padding:10px 12px">
-        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Entrate</div>
-        <div style="font-size:20px;font-weight:800;color:var(--green)">${nEntrate.toLocaleString('it')}</div>
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--t3)">Entrate</div>
+        <div style="font-size:22px;font-weight:800;color:var(--green)">${nEn}</div>
       </div>
-      <div style="background:var(--bg3);border-radius:10px;padding:10px 12px">
-        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Cat. Spese</div>
-        <div style="font-size:20px;font-weight:800;color:var(--accent)">${nCatSp}</div>
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--t3)">Cat. spese</div>
+        <div style="font-size:22px;font-weight:800;color:var(--accent)">${nCs}</div>
       </div>
-      <div style="background:var(--bg3);border-radius:10px;padding:10px 12px">
-        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Cat. Entrate</div>
-        <div style="font-size:20px;font-weight:800;color:var(--accent)">${nCatEn}</div>
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--t3)">Cat. entrate</div>
+        <div style="font-size:22px;font-weight:800;color:var(--purple)">${nCe}</div>
       </div>
     </div>`;
 }
 
-function exportCSV(tipo) {
-  const now  = new Date();
-  const isSpese = tipo === 'spese';
-  const records = isSpese ? _DB.spese : _DB.entrate;
-  const cats    = isSpese ? (_DB.categorie?.spese || []) : (_DB.categorie?.entrate || []);
+function exportCSV() {
+  const allRecords = getRecords();
+  const range      = document.getElementById('export-range').value;
+  const now        = new Date();
+  const nowYM      = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const cats       = getCats();
+
+  let records = allRecords;
+  if (range === 'month')    records = allRecords.filter(r => ym(r.data) === nowYM);
+  if (range === '3months') {
+    const d3 = new Date(now); d3.setMonth(d3.getMonth()-2);
+    const from = `${d3.getFullYear()}-${String(d3.getMonth()+1).padStart(2,'0')}`;
+    records = allRecords.filter(r => ym(r.data) >= from);
+  }
+  if (range === 'notexported') records = allRecords.filter(r=>!r.exported);
 
   if (!records.length) { showToast('⚠ Nessun record da esportare'); return; }
 
-  const tipoLabel = isSpese ? 'spesa' : 'entrata';
+  // Header CSV compatibile con il tool principale
   const header = 'Tipo,Data,Descrizione,IDCategoria,NomeCategoria,Importo,Note';
-  const rows = records.map(r => {
-    const cat  = cats.find(c => c.ID == (r.idCat || r.IDCategoria)) || {Nome:'—'};
-    const desc = (r.desc || r.Descrizione || '').replace(/,/g,'|').replace(/"/g,'""');
-    const note = (r.note || r.Note || '').replace(/,/g,'|').replace(/"/g,'""');
-    const idCat = r.idCat || r.IDCategoria || '';
-    const importo = parseFloat(r.importo || r.Importo || 0).toFixed(2);
-    const data = r.data || r.Data || '';
-    return `${tipoLabel},${data},"${desc}",${idCat},"${cat.Nome}",${importo},"${note}"`;
+  const rows   = records.map(r => {
+    const arr  = r.tipo==='sp' ? cats.spese : cats.entrate;
+    const cat  = arr.find(c=>c.ID===r.idCat) || {Nome:'—'};
+    const tipo = r.tipo==='sp' ? 'spesa' : 'entrata';
+    const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
+    const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
+    return `${tipo},${r.data},"${desc}",${r.idCat},"${cat.Nome}",${r.importo.toFixed(2)},"${note}"`;
   });
 
-  const csvFull = [header, ...rows].join('\n');
-  const blob = new Blob(['\uFEFF' + csvFull], {type:'text/csv;charset=utf-8'});
+  // Aggiungi cancellazioni
+  const DKEY2 = 'budget_deleted_log';
+  const delLog = JSON.parse(localStorage.getItem(DKEY2)||'[]')
+                  .filter(d => !d.isLocal); // escludi cancellazioni di record mai inviati al desktop
+  const delRows = delLog.map(d => {
+    const tipo = d.tipo==='sp' ? 'spesa' : 'entrata';
+    const desc = ('CANCELLATO:' + (d.desc||'')).replace(/,/g,'|').replace(/"/g,'""');
+    return `${tipo},${d.data},"${desc}",${d.idCat||''},"CANCELLATO",${(d.importo||0).toFixed(2)},""`;
+  });
+
+  const csvFull = [header, ...rows, ...delRows].join('\n');
+  const blob = new Blob(['\uFEFF'+csvFull], {type:'text/csv;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `budget-${tipo}-${now.toISOString().slice(0,10)}.csv`;
+  a.download = `budget-iphone-${now.toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast(`✓ ${records.length} record esportati`);
+  // Non svuota deleted_log — verrà pulito solo all'arrivo del nuovo snapshot dal desktop
+
+  // Non marca come exported — il CSV successivo includerà ancora questi record
+  // finché il desktop non li importa. La deduplicazione sul desktop evita duplicati.
+  showToast(`✓ ${records.length} record esportati${delLog.length?' + '+delLog.length+' cancellaz.':''}`);
+  renderExportStats();
 }
+
+function exportCSVSupabase(tipo) {
+  const arr  = tipo === 'spese' ? _DB.spese : _DB.entrate;
+  if (!arr.length) { showToast('⚠ Nessun dato da esportare'); return; }
+  const header = 'Tipo,Data,Descrizione,Categoria,Importo,Note';
+  const rows   = arr.map(r => {
+    const t    = tipo === 'spese' ? 'spesa' : 'entrata';
+    const desc = (r.desc||'').replace(/,/g,'|').replace(/"/g,'""');
+    const note = (r.note||'').replace(/,/g,'|').replace(/"/g,'""');
+    return `${t},${r.data},"${desc}","${r.catNome||''}",${r.importo.toFixed(2)},"${note}"`;
+  });
+  const csv  = [header, ...rows].join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `budget-${tipo}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`✓ ${arr.length} ${tipo} esportate`);
+}
+
+function clearExported() {}
 
 // ══════════════════════════════════════════
 //  SINCRONIZZA CATEGORIE DA PC
@@ -2498,6 +2513,46 @@ function init() {
   renderCatGrid();
   renderQuickGrid();
   setType('sp');
+  _initPullToRefresh();
+}
+
+// ── Pull-to-refresh su dashboard e storico ─────────────────────
+function _initPullToRefresh() {
+  let startY = 0, pulling = false, threshold = 70;
+
+  const pages = ['page-dashboard', 'page-storico'];
+  pages.forEach(pid => {
+    const el = document.getElementById(pid);
+    if (!el) return;
+
+    el.addEventListener('touchstart', e => {
+      if (el.scrollTop === 0) { startY = e.touches[0].clientY; pulling = true; }
+    }, { passive: true });
+
+    el.addEventListener('touchmove', e => {
+      if (!pulling) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 10 && el.scrollTop === 0) {
+        el.style.transition = 'none';
+        el.style.transform  = `translateY(${Math.min(dy * 0.4, 40)}px)`;
+      }
+    }, { passive: true });
+
+    el.addEventListener('touchend', async e => {
+      if (!pulling) return;
+      pulling = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      el.style.transition = 'transform .3s';
+      el.style.transform  = '';
+      if (dy > threshold) {
+        showToast('🔄 Aggiornamento...');
+        await loadData();
+        _refreshCurrentPage();
+        renderCatGrid();
+        showToast('✓ Dati aggiornati');
+      }
+    }, { passive: true });
+  });
 }
 
 async function sbLogoutMobile() {
@@ -2515,17 +2570,24 @@ async function sbLogoutMobile() {
 }
 
 async function sbSyncNow() {
-  const btn = document.getElementById('sb-sync-btn');
+  const btn = document.getElementById('sb-sync-now-btn') || document.getElementById('sb-connect-btn');
   if (btn) { btn.textContent = '⟳ Sync...'; btn.disabled = true; }
   try {
     await loadData();
     _refreshCurrentPage();
     renderCatGrid();
+    if (currentPage === 'export') renderExportStats();
+    // Aggiorna stato login nel pannello snapshot
+    const user = await sbCurrentUser();
+    const statusSnap  = document.getElementById('sb-status-txt-snap');
+    const logoutSnap  = document.getElementById('sb-logout-btn-snap');
+    if (statusSnap && user) statusSnap.textContent = `✓ Connesso come ${user.email}`;
+    if (logoutSnap) logoutSnap.style.display = user ? '' : 'none';
     showToast('✓ Dati aggiornati da Supabase');
   } catch(e) {
     showToast('❌ Errore sync: ' + e.message, 'error');
   } finally {
-    if (btn) { btn.textContent = '☁ Sync'; btn.disabled = false; }
+    if (btn) { btn.textContent = '☁ Sincronizza ora'; btn.disabled = false; }
   }
 }
 
@@ -2539,59 +2601,21 @@ window.addEventListener('load', async function() {
     if (ok) {
       renderDashboard();
       renderCatGrid();
+      renderExportStats();
       const user = await sbCurrentUser();
+      // Aggiorna stato nel pannello Export (vecchio)
       const statusTxt = document.getElementById('sb-status-txt');
       const logoutBtn = document.getElementById('sb-logout-btn');
       if (statusTxt && user) statusTxt.textContent = `✓ Connesso come ${user.email}`;
       if (logoutBtn) logoutBtn.style.display = '';
+      // Aggiorna stato nel pannello Snapshot
+      const statusSnap = document.getElementById('sb-status-txt-snap');
+      const logoutSnap = document.getElementById('sb-logout-btn-snap');
+      if (statusSnap && user) statusSnap.textContent = `✓ Connesso come ${user.email}`;
+      if (logoutSnap && user) logoutSnap.style.display = '';
     }
   });
 });
-
-// ══════════════════════════════════════════
-//  PULL TO REFRESH
-// ══════════════════════════════════════════
-(function() {
-  const PTR_PAGES = ['dashboard', 'storico'];
-  let startY = 0, pulling = false, triggered = false;
-  const ind   = document.getElementById('ptr-indicator');
-  const label = document.getElementById('ptr-label');
-  const THRESHOLD = 65;
-
-  document.addEventListener('touchstart', e => {
-    if (!PTR_PAGES.includes(currentPage)) return;
-    if (window.scrollY > 0) return;
-    startY   = e.touches[0].clientY;
-    pulling  = true;
-    triggered = false;
-  }, { passive: true });
-
-  document.addEventListener('touchmove', e => {
-    if (!pulling) return;
-    const delta = e.touches[0].clientY - startY;
-    if (delta < 10) return;
-    if (delta >= THRESHOLD && !triggered) {
-      triggered = true;
-      label.textContent = 'Rilascia per aggiornare';
-      ind.classList.add('visible');
-    } else if (delta < THRESHOLD) {
-      ind.classList.remove('visible');
-    }
-  }, { passive: true });
-
-  document.addEventListener('touchend', async () => {
-    if (!pulling || !triggered) { pulling = false; return; }
-    pulling = false;
-    label.textContent = 'Aggiornamento...';
-    try {
-      await loadData();
-      _refreshCurrentPage();
-    } finally {
-      ind.classList.remove('visible');
-      triggered = false;
-    }
-  });
-})();
 
 </script>
 
