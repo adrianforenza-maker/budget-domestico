@@ -1638,6 +1638,7 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span style="font-size:11px;color:var(--t3);font-family:var(--m)">Mese:</span>
         <div id="bil-cmp-months" style="display:flex;gap:3px;flex-wrap:wrap"></div>
+        <button onclick="_bilCmpSetAllMonths()" id="bil-cmp-all-btn" title="Seleziona tutti i mesi" style="padding:3px 8px;border-radius:6px;border:1px solid var(--b2);background:var(--bg4);color:var(--t3);cursor:pointer;font-size:10px;font-weight:700;font-family:var(--m);transition:all .15s">Anno ✓</button>
         <span style="font-size:9px;color:var(--t3);font-family:var(--m);opacity:0.6" title="Tieni premuto Ctrl e clicca per selezionare più mesi">ctrl+clic=multi</span>
       </div>
     </div>
@@ -4877,9 +4878,23 @@ function _renderBilConfronto() {
     canvas.addEventListener('click', canvas._bilCmpClickHandler);
   }
 
+  // Aggiorna stile bottone Anno intero
+  const allBtn = document.getElementById('bil-cmp-all-btn');
+  if (allBtn) {
+    const allActive = _bilCmpMoSet.size === 12;
+    allBtn.style.border = allActive ? '1px solid var(--accent)' : '1px solid var(--b2)';
+    allBtn.style.background = allActive ? 'rgba(79,142,247,0.2)' : 'var(--bg4)';
+    allBtn.style.color = allActive ? 'var(--accent)' : 'var(--t3)';
+  }
   const hint = document.getElementById('bil-cmp-hint');
   if (hint) hint.textContent = `${periodoLabel} — ${winLabels.length} anni visibili su ${labels.length} totali · Ctrl+clic=multi-anno · Doppio-clic=dettaglio`;
   _bilCmpUpdateYrHighlight();
+}
+
+function _bilCmpSetAllMonths() {
+  _bilCmpMoSet = new Set([1,2,3,4,5,6,7,8,9,10,11,12]);
+  _bilCmpOffset = 0;
+  _renderBilConfronto();
 }
 
 function _bilCmpSetMo(mo, event) {
@@ -14544,6 +14559,7 @@ window.toggleSelectAll = toggleSelectAll;
 window.clearMultiSelect = clearMultiSelect;
 window.deleteMultiple = deleteMultiple;
 window._bilOpenCatRiepilogo = _bilOpenCatRiepilogo;
+window._bilCmpSetAllMonths = _bilCmpSetAllMonths;
 window.closeCatRiepilogo = closeCatRiepilogo;
 window._bilOpenCatDrill = _bilOpenCatDrill;
 window.closeCatDrill = closeCatDrill;
