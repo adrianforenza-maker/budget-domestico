@@ -1730,6 +1730,28 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
   </div>
 </div>
 
+<!-- ══ MODAL EN CAT DRILL ══ -->
+<div class="modal-overlay" id="modal-encat-drill" style="z-index:1300">
+  <div class="modal" id="modal-encat-drill-inner">
+    <div class="modal-hdr">
+      <div><div class="modal-title" id="encat-drill-title">Categoria Entrata</div><div class="modal-sub" id="encat-drill-sub"></div></div>
+      <button class="modal-close" onclick="closeEnCatDrill()">✕</button>
+    </div>
+    <div id="encat-drill-body"></div>
+  </div>
+</div>
+
+<!-- ══ MODAL EN CAT RIEPILOGO ══ -->
+<div class="modal-overlay" id="modal-encat-riepilogo" style="z-index:1200">
+  <div class="modal" id="modal-encat-riepilogo-inner">
+    <div class="modal-hdr">
+      <div><div class="modal-title" id="encat-riepilogo-title">Riepilogo entrate</div><div class="modal-sub" id="encat-riepilogo-sub"></div></div>
+      <button class="modal-close" onclick="closeEnCatRiepilogo()">✕</button>
+    </div>
+    <div id="encat-riepilogo-body"></div>
+  </div>
+</div>
+
 <!-- ══ MODAL PREFERITO ══ -->
 <div class="modal-overlay" id="modal-pref" style="display:none;align-items:center;justify-content:center">
   <div class="modal center" style="max-width:500px">
@@ -5187,12 +5209,25 @@ function _bilCmpOpenDrillYrSet() {
   const maxCat = catSorted.length?catSorted[0][1].tot:1;
   _bilCatDrillCtx = { years, months };
 
+  // ── Aggregato entrate per categoria
+  const byECat = {};
+  allEntrate.forEach(r => {
+    const cat = DB.categorieEntrate.find(c=>c.ID===r.IDCategoria);
+    const nome = cat ? cat.Nome : '—';
+    const colore = cat ? cat.Colore : '#1ecf96';
+    if (!byECat[nome]) byECat[nome] = { tot: 0, colore };
+    byECat[nome].tot += r.Importo;
+  });
+  const eCatSorted = Object.entries(byECat).sort((a,b)=>b[1].tot-a[1].tot);
+  const maxECat = eCatSorted.length ? eCatSorted[0][1].tot : 1;
+
   document.getElementById('drill-title').textContent = `Confronto mensile — ${periodoLabel}`;
   document.getElementById('drill-sub').textContent   = `${nUAll} uscite totali · ${years.length} anni · ${months.length} mes${months.length===1?'e':'i'}`;
   document.getElementById('drill-body').innerHTML = `
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
       ${years.map(yr=>`<button onclick="_bilCmpOpenDrillYrSingle(${yr})" style="padding:4px 12px;border-radius:6px;border:2px solid ${yrColor(yr)};background:rgba(79,142,247,0.1);color:${yrColor(yr)};cursor:pointer;font-size:11px;font-weight:700">📋 Solo ${yr}</button>`).join('')}
-      <button onclick="_bilOpenCatRiepilogo()" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(245,161,36,0.6);background:rgba(245,161,36,0.12);color:#f5a124;cursor:pointer;font-size:11px;font-weight:700;margin-left:auto">📊 Riepilogo categorie</button>
+      <button onclick="_bilOpenCatRiepilogo()" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(245,161,36,0.6);background:rgba(245,161,36,0.12);color:#f5a124;cursor:pointer;font-size:11px;font-weight:700;margin-left:auto">📊 Riepilogo uscite</button>
+      <button onclick="_bilOpenEnCatRiepilogo()" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(30,207,150,0.6);background:rgba(30,207,150,0.12);color:#1ecf96;cursor:pointer;font-size:11px;font-weight:700">📊 Riepilogo entrate</button>
     </div>
     <div id="bil-sec-bil" class="kpi-grid" style="margin-bottom:16px">
       <div class="kpi"><div class="kpi-label">Bilancio totale</div>
@@ -5212,6 +5247,13 @@ function _bilCmpOpenDrillYrSet() {
         <span class="prog-name"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${colore};margin-right:5px"></span>${nome}</span>
         <span class="prog-val">${eur(tot)} <span style="color:var(--t3);font-size:10px">(${totUAll>0?(tot/totUAll*100).toFixed(1):0}%)</span> <span style="color:var(--accent);font-size:11px">›</span></span>
       </div><div class="prog-bar"><div class="prog-fill" style="width:${maxCat>0?(tot/maxCat*100):0}%;background:${colore}"></div></div></div>`
+    ).join('')}</div>` : ''}
+    ${eCatSorted.length ? `<div id="bil-sec-encat" class="sec-title" style="margin-bottom:8px">Entrate per categoria <span style="font-size:10px;color:var(--t3);font-weight:400">(clicca per dettaglio)</span></div>
+    <div class="prog-row" style="margin-bottom:16px">${eCatSorted.map(([nome,{tot,colore}])=>
+      `<div class="prog-item" data-encatname="${nome.replace(/"/g,'&quot;')}" style="cursor:pointer;border-radius:6px;padding:4px 6px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'"><div class="prog-top">
+        <span class="prog-name"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${colore};margin-right:5px"></span>${nome}</span>
+        <span class="prog-val">${eur(tot)} <span style="color:var(--t3);font-size:10px">(${totEAll>0?(tot/totEAll*100).toFixed(1):0}%)</span> <span style="color:var(--accent);font-size:11px">›</span></span>
+      </div><div class="prog-bar"><div class="prog-fill" style="width:${maxECat>0?(tot/maxECat*100):0}%;background:${colore}"></div></div></div>`
     ).join('')}</div>` : ''}
     <div id="bil-sec-sp" class="sec-title" style="margin-bottom:8px">Tutte le uscite (${allUscite.length})</div>
     <div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Anno</th><th>Categoria</th><th>Descrizione</th><th class="td-num">Importo</th></tr></thead>
@@ -5249,6 +5291,8 @@ function _bilCmpOpenDrillYrSet() {
       drillBody.addEventListener('click', function(e) {
         const item = e.target.closest('[data-catname]');
         if (item) _bilOpenCatDrill(item.dataset.catname, _bilCatDrillCtx.years, _bilCatDrillCtx.months);
+        const eItem = e.target.closest('[data-encatname]');
+        if (eItem) _bilOpenEnCatDrill(eItem.dataset.encatname, _bilCatDrillCtx.years, _bilCatDrillCtx.months);
       });
     }
   });
@@ -8442,6 +8486,167 @@ function closeCatDrill() {
   const modal = document.getElementById('modal-cat-drill');
   const inner = document.getElementById('modal-cat-drill-inner');
   if (inner) inner.scrollTop = 0;
+  modal.classList.remove('open');
+}
+
+// ── Riepilogo sintetico entrate per categoria ─────────────────────────────
+function _bilOpenEnCatRiepilogo() {
+  const years  = _bilCatDrillCtx.years.map(String);
+  const months = _bilCatDrillCtx.months.map(Number);
+  if (!years.length || !months.length) return;
+
+  const ML = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  const YR_COLORS = ['#4f8ef7','#1ecf96','#f5a124','#e855ec','#22d4e0','#f38ba8','#a6e3a1','#cba6f7'];
+  const yrColor = yr => YR_COLORS[(years.indexOf(String(yr)))%YR_COLORS.length];
+  const firstYr = years[0], lastYr = years[years.length-1];
+
+  const catData = {};
+  DB.datiEntrate.forEach(r => {
+    if (!r.Data) return;
+    const yrStr = r.Data.slice(0,4);
+    const mo = parseInt(r.Data.slice(5,7));
+    if (!years.includes(yrStr) || !months.includes(mo)) return;
+    const cat = DB.categorieEntrate.find(c=>c.ID===r.IDCategoria);
+    const nome = cat ? cat.Nome : '—';
+    const colore = cat ? cat.Colore : '#1ecf96';
+    if (!catData[nome]) catData[nome] = { colore, totPerAnno: {} };
+    catData[nome].totPerAnno[yrStr] = (catData[nome].totPerAnno[yrStr]||0) + r.Importo;
+  });
+
+  const catSorted = Object.entries(catData).sort((a,b)=>(b[1].totPerAnno[lastYr]||0)-(a[1].totPerAnno[lastYr]||0));
+  const totGlobaleFirst = catSorted.reduce((s,[,d])=>s+(d.totPerAnno[firstYr]||0),0);
+  const totGlobaleLast  = catSorted.reduce((s,[,d])=>s+(d.totPerAnno[lastYr]||0),0);
+  const totGlobaleDiff  = totGlobaleLast - totGlobaleFirst;
+  const totGlobalePct   = totGlobaleFirst>0 ? (totGlobaleDiff/totGlobaleFirst*100).toFixed(0) : null;
+  const periodoLabel = months.length===12?'Anno intero':months.length===1?ML[months[0]-1]:months.map(m=>ML[m-1]).join('+');
+
+  const TH='font-size:10px;padding:4px 8px;white-space:nowrap';
+  const TD='font-size:11px;padding:5px 8px;white-space:nowrap';
+  const TDN=TD+';text-align:right';
+  const thYears=years.map(yr=>`<th style="${TH};text-align:right;color:${yrColor(yr)};border-bottom:2px solid ${yrColor(yr)}">${yr}</th>`).join('');
+  const deltaHdr=`<th style="${TH};text-align:right;color:var(--t3)">Δ ${firstYr}→${lastYr}</th><th style="${TH};text-align:right;color:var(--t3)">%</th>`;
+
+  const rows = catSorted.map(([nome,{colore,totPerAnno}])=>{
+    const first=totPerAnno[firstYr]||0, last=totPerAnno[lastYr]||0, diff=last-first;
+    const pct=first>0?(diff/first*100).toFixed(0):null;
+    const dc=diff>0?'var(--green)':diff<0?'var(--red)':'var(--t3)';
+    const arrow=diff>0?' ▲':diff<0?' ▼':'';
+    const yrCells=years.map(yr=>`<td style="${TDN};color:${(totPerAnno[yr]||0)>0?'var(--green)':'var(--t3)'}">${(totPerAnno[yr]||0)>0?eur(totPerAnno[yr]):'—'}</td>`).join('');
+    return `<tr onclick="_bilOpenEnCatDrill('${nome.replace(/'/g,"\\'")}',_bilCatDrillCtx.years,_bilCatDrillCtx.months)"
+      style="cursor:pointer;transition:background .12s"
+      onmouseenter="this.style.background='rgba(255,255,255,0.05)'"
+      onmouseleave="this.style.background='transparent'">
+      <td style="${TD}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${colore};margin-right:6px"></span><span style="font-weight:600">${nome}</span></td>
+      ${yrCells}
+      <td style="${TDN};font-weight:700;color:${dc}">${diff===0?'—':(diff>0?'+':'')+eur(Math.abs(diff))+arrow}</td>
+      <td style="${TDN};font-weight:700;color:${dc}">${pct!==null?(diff>0?'+':'')+pct+'%':'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const BT=';border-top:2px solid var(--b2)';
+  const totYrCells=years.map(yr=>{const tot=catSorted.reduce((s,[,d])=>s+(d.totPerAnno[yr]||0),0);return `<td style="${TDN};font-weight:800;color:var(--green)${BT}">${tot>0?eur(tot):'—'}</td>`;}).join('');
+  const dc=totGlobaleDiff>0?'var(--green)':totGlobaleDiff<0?'var(--red)':'var(--t3)';
+  const arrow=totGlobaleDiff>0?' ▲':totGlobaleDiff<0?' ▼':'';
+  const totRow=`<tr style="background:rgba(255,255,255,0.04)"><td style="${TD};font-weight:800;color:var(--t)${BT}">TOTALE</td>${totYrCells}<td style="${TDN};font-weight:800;color:${dc}${BT}">${totGlobaleDiff===0?'—':(totGlobaleDiff>0?'+':'')+eur(Math.abs(totGlobaleDiff))+arrow}</td><td style="${TDN};font-weight:800;color:${dc}${BT}">${totGlobalePct!==null?(totGlobaleDiff>0?'+':'')+totGlobalePct+'%':'—'}</td></tr>`;
+
+  document.getElementById('encat-riepilogo-title').textContent=`Riepilogo entrate — ${firstYr}→${lastYr}`;
+  document.getElementById('encat-riepilogo-sub').textContent=`${periodoLabel} · ${catSorted.length} categorie · clicca per dettaglio`;
+  document.getElementById('encat-riepilogo-body').innerHTML=`<div style="overflow-x:auto"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th style="${TH};text-align:left;color:var(--t3)">Categoria</th>${thYears}${deltaHdr}</tr></thead><tbody>${rows}${totRow}</tbody></table></div>`;
+
+  const modal=document.getElementById('modal-encat-riepilogo');
+  const inner=document.getElementById('modal-encat-riepilogo-inner');
+  if(inner) inner.scrollTop=0;
+  modal.classList.add('open');
+}
+
+function closeEnCatRiepilogo() {
+  const modal=document.getElementById('modal-encat-riepilogo');
+  const inner=document.getElementById('modal-encat-riepilogo-inner');
+  if(inner) inner.scrollTop=0;
+  modal.classList.remove('open');
+}
+
+// ── Dettaglio mesi×anni per singola categoria entrate ─────────────────────
+function _bilOpenEnCatDrill(catNome, years, months) {
+  years  = years.map(String);
+  months = months.map(Number);
+  const ML=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  const YR_COLORS=['#4f8ef7','#1ecf96','#f5a124','#e855ec','#22d4e0','#f38ba8','#a6e3a1','#cba6f7'];
+  const yrColor=yr=>YR_COLORS[(years.indexOf(String(yr)))%YR_COLORS.length];
+  const cat=DB.categorieEntrate.find(c=>c.Nome===catNome);
+  const colore=cat?cat.Colore:'#1ecf96';
+
+  const data={};
+  years.forEach(yr=>{data[yr]={};months.forEach(mo=>{data[yr][mo]=0;});});
+  DB.datiEntrate.forEach(r=>{
+    if(!r.Data) return;
+    const yrStr=r.Data.slice(0,4), mo=parseInt(r.Data.slice(5,7));
+    if(!years.includes(yrStr)||!months.includes(mo)) return;
+    const c=DB.categorieEntrate.find(c=>c.ID===r.IDCategoria);
+    if((c?c.Nome:'—')!==catNome) return;
+    data[yrStr][mo]+=r.Importo;
+  });
+
+  const totPerAnno=years.map(yr=>months.reduce((s,mo)=>s+(data[yr][mo]||0),0));
+  const totGlobale=totPerAnno.reduce((s,v)=>s+v,0);
+  const periodoLabel=months.length===1?ML[months[0]-1]:months.map(m=>ML[m-1]).join('+');
+
+  const TD='white-space:nowrap;font-size:10px;padding:3px 6px';
+  const TDN=TD+';text-align:right';
+  const TH='font-size:10px;padding:3px 6px;white-space:nowrap';
+  const thYears=years.map(yr=>`<th style="text-align:center;padding:5px 6px;color:${yrColor(yr)};font-size:11px;border-bottom:2px solid ${yrColor(yr)}">${yr}</th>`).join('');
+  const deltaHdr=years.length>1?`<th style="${TH};color:var(--t3)">Δ ${years[0]}→${years[years.length-1]}</th>`:'';
+
+  const rows=months.map(mo=>{
+    const cells=years.map(yr=>{const v=data[yr][mo]||0;return `<td style="${TDN};color:${v>0?'var(--green)':'var(--t3)'}">${v>0?eur(v):'—'}</td>`;}).join('');
+    let delta='';
+    if(years.length>1){const first=data[years[0]][mo]||0,last=data[years[years.length-1]][mo]||0,diff=last-first;delta=`<td style="${TDN};color:${diff>0?'var(--green)':diff<0?'var(--red)':'var(--t3)'};font-weight:700">${diff===0?'—':(diff>0?'+':'')+eur(Math.abs(diff))+(diff>0?' ▲':' ▼')}</td>`;}
+    return `<tr><td style="font-weight:700;color:var(--t2);${TD}">${ML[mo-1]}</td>${cells}${delta}</tr>`;
+  });
+
+  const BT=TD+';border-top:1px solid var(--b2)';
+  const BTN=TDN+';border-top:1px solid var(--b2)';
+  const totCells=years.map((yr,i)=>`<td style="${BTN};color:var(--green);font-weight:800">${totPerAnno[i]>0?eur(totPerAnno[i]):'—'}</td>`).join('');
+  let totDelta='';
+  if(years.length>1){const diff=totPerAnno[totPerAnno.length-1]-totPerAnno[0];const pct=totPerAnno[0]>0?(diff/totPerAnno[0]*100).toFixed(0):null;totDelta=`<td style="${BTN};font-weight:800;color:${diff>0?'var(--green)':diff<0?'var(--red)':'var(--t3)'}">${diff===0?'—':(diff>0?'+':'')+eur(Math.abs(diff))}${pct!==null?`<span style="font-size:9px;opacity:.65;margin-left:2px">${diff>0?'+':''}${pct}%</span>`:''}${diff>0?' ▲':diff<0?' ▼':''}</td>`;}
+
+  document.getElementById('encat-drill-title').innerHTML=`<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colore};margin-right:6px"></span>${catNome}`;
+  document.getElementById('encat-drill-sub').textContent=`${periodoLabel} · ${years.length} anni · totale aggregato ${eur(totGlobale)}`;
+  document.getElementById('encat-drill-body').innerHTML=`
+    <div style="margin-bottom:16px"><div style="overflow-x:auto">
+      <table style="min-width:100%;border-collapse:collapse">
+        <thead><tr><th style="padding:5px 6px"></th>${thYears}${deltaHdr}</tr>
+          <tr><th style="${TH};color:var(--t3)">Mese</th>${years.map(()=>`<th style="${TH};color:var(--green)">Entr.</th>`).join('')}${years.length>1?`<th style="${TH};color:var(--t3)">Δ</th>`:''}</tr>
+        </thead>
+        <tbody>${rows.join('')}<tr style="background:rgba(255,255,255,0.04)"><td style="font-weight:800;color:var(--t);${BT}">TOTALE</td>${totCells}${totDelta}</tr></tbody>
+      </table>
+    </div></div>
+    <div class="sec-title" style="margin-bottom:8px">Trend annuale</div>
+    <div style="position:relative;height:200px;margin-bottom:8px"><canvas id="chart-encat-drill-trend"></canvas></div>`;
+
+  requestAnimationFrame(()=>{
+    makeChart('chart-encat-drill-trend',{
+      type:'bar',
+      data:{labels:years,datasets:[
+        {label:catNome,data:totPerAnno,backgroundColor:years.map(yr=>yrColor(yr)+'99'),borderColor:years.map(yr=>yrColor(yr)),borderWidth:1,borderRadius:3},
+        {label:'Trend',data:totPerAnno,type:'line',borderColor:colore,backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointBackgroundColor:colore,tension:0.3}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${eur(ctx.raw)}`}}},
+        scales:{x:{ticks:{color:'var(--t3)',font:{size:10}},grid:{color:'rgba(255,255,255,0.05)'}},y:{ticks:{color:'var(--t3)',font:{size:10},callback:v=>'€'+Math.round(v/1000)+'k'},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    });
+  });
+
+  const modal=document.getElementById('modal-encat-drill');
+  const inner=document.getElementById('modal-encat-drill-inner');
+  if(inner) inner.scrollTop=0;
+  modal.classList.add('open');
+}
+
+function closeEnCatDrill() {
+  const modal=document.getElementById('modal-encat-drill');
+  const inner=document.getElementById('modal-encat-drill-inner');
+  if(inner) inner.scrollTop=0;
   modal.classList.remove('open');
 }
 
@@ -14559,6 +14764,10 @@ window.toggleSelectAll = toggleSelectAll;
 window.clearMultiSelect = clearMultiSelect;
 window.deleteMultiple = deleteMultiple;
 window._bilOpenCatRiepilogo = _bilOpenCatRiepilogo;
+window._bilOpenEnCatRiepilogo = _bilOpenEnCatRiepilogo;
+window.closeEnCatRiepilogo = closeEnCatRiepilogo;
+window._bilOpenEnCatDrill = _bilOpenEnCatDrill;
+window.closeEnCatDrill = closeEnCatDrill;
 window._bilCmpSetAllMonths = _bilCmpSetAllMonths;
 window.closeCatRiepilogo = closeCatRiepilogo;
 window._bilOpenCatDrill = _bilOpenCatDrill;
