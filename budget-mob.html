@@ -1507,7 +1507,7 @@ function renderDashboard() {
   const pct    = totEn > 0 ? Math.min(100, (saldo/totEn)*100) : 0;
 
   document.getElementById('month-label').textContent = fmtMonth(currentMonth);
-  document.getElementById('kpi-en').textContent  = '€ ' + eur(totEnCurr);
+  document.getElementById('kpi-en').textContent  = '€ ' + eur(totEn);
   document.getElementById('kpi-sp').textContent  = '€ ' + eur(totSp);
   const sEl = document.getElementById('kpi-saldo');
   sEl.textContent = (saldo<0?'-':'') + '€ ' + eur(Math.abs(saldo));
