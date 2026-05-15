@@ -8436,6 +8436,94 @@ function _bilOpenCatDrill(catNome, years, months) {
   const chartId = 'chart-cat-drill-trend';
   const trendData = years.map((yr,i) => ({ x: yr, y: totPerAnno[i] }));
 
+  // ── Raccogli transazioni reali per anno×mese ──
+  const txByYrMo = {}; // { yr: { mo: [{Data, Descrizione, Importo}] } }
+  years.forEach(yr => { txByYrMo[yr] = {}; months.forEach(mo => { txByYrMo[yr][mo] = []; }); });
+  DB.dati.forEach(r => {
+    if (!r.Data) return;
+    const yrStr = r.Data.slice(0,4);
+    const mo = parseInt(r.Data.slice(5,7));
+    if (!years.includes(yrStr) || !months.includes(mo)) return;
+    const c = DB.categorie.find(c => c.ID === r.IDCategoria);
+    if ((c ? c.Nome : '—') !== catNome) return;
+    txByYrMo[yrStr][mo].push(r);
+  });
+  // Ordina per data desc dentro ogni mese
+  years.forEach(yr => months.forEach(mo => txByYrMo[yr][mo].sort((a,b) => b.Data.localeCompare(a.Data))));
+
+  // ── Costruisci HTML elenco transazioni affiancato ──
+  const ML2 = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const txColStyle = `flex:1;min-width:0;padding:0 4px`;
+  const txHdrStyle = yr => `font-size:11px;font-weight:800;color:${yrColor(yr)};padding:6px 4px 4px;border-bottom:2px solid ${yrColor(yr)};margin-bottom:4px`;
+  const txMoStyle  = `font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;padding:8px 0 2px`;
+  const txRowStyle = `display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:6px`;
+  const txDescStyle= `font-size:10px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1`;
+  const txImpStyle = `font-size:10px;color:var(--red);font-weight:600;white-space:nowrap`;
+  const txDateStyle= `font-size:9px;color:var(--t3);white-space:nowrap`;
+  const aggrega    = localStorage.getItem('catDrillAggrega') === '1';
+
+  const buildTxRows = (txs, agg, impColor, sign) => {
+    if (!agg) return txs.map(r =>
+      `<div style="${txRowStyle}">
+        <span style="${txDescStyle}" title="${r.Descrizione||''}">${r.Descrizione||'—'}</span>
+        <span style="${txDateStyle}">${r.Data.slice(8)}</span>
+        <span style="${txImpStyle}">${sign}${eur(r.Importo)}</span>
+      </div>`).join('');
+    // Aggrega per descrizione normalizzata
+    const map = {};
+    txs.forEach(r => {
+      const k = (r.Descrizione||'—').toLowerCase().trim();
+      if (!map[k]) map[k] = { desc: r.Descrizione||'—', tot: 0, n: 0 };
+      map[k].tot += r.Importo; map[k].n++;
+    });
+    return Object.values(map).sort((a,b)=>b.tot-a.tot).map(g =>
+      `<div style="${txRowStyle}">
+        <span style="${txDescStyle}">${g.desc}</span>
+        <span style="${txDateStyle}">×${g.n}</span>
+        <span style="${txImpStyle}">${sign}${eur(g.tot)}</span>
+      </div>`).join('');
+  };
+
+  const txCols = years.map(yr => {
+    const rows = months.map(mo => {
+      const txs = txByYrMo[yr][mo];
+      if (!txs.length) return '';
+      return `<div style="${txMoStyle}">${ML2[mo-1]}</div>${buildTxRows(txs, aggrega, 'var(--red)', '-')}`;
+    }).join('');
+    const totAnno = totPerAnno[years.indexOf(yr)];
+    const nTx = months.reduce((s,mo)=>s+txByYrMo[yr][mo].length, 0);
+    const media = nTx > 0 ? totAnno/nTx : 0;
+    const totaleFooter = `<div style="border-top:2px solid var(--b2);margin-top:8px;padding-top:6px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--t);padding:2px 0">
+        <span>Totale (${nTx} mov.)</span><span style="color:var(--red)">-${eur(totAnno)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);padding:2px 0">
+        <span>Media/mov.</span><span>-${eur(media)}</span>
+      </div>
+    </div>`;
+    return `<div style="${txColStyle}">
+      <div style="${txHdrStyle(yr)}">${yr} <span style="font-size:10px;font-weight:400;opacity:.7">${eur(totAnno)}</span></div>
+      ${rows || '<div style="font-size:10px;color:var(--t3);padding:8px 0">Nessuna transazione</div>'}
+      ${totaleFooter}
+    </div>`;
+  }).join(`<div style="width:1px;background:var(--b2);margin:0 4px;align-self:stretch"></div>`);
+
+  const toggleAggrega = `<button onclick="localStorage.setItem('catDrillAggrega',localStorage.getItem('catDrillAggrega')==='1'?'0':'1');_bilOpenCatDrill('${catNome.replace(/'/g,"\'")}',_bilCatDrillCtx.years,_bilCatDrillCtx.months)" style="padding:3px 10px;border-radius:6px;border:1px solid ${aggrega?'var(--accent)':'var(--b2)'};background:${aggrega?'rgba(79,142,247,0.15)':'transparent'};color:${aggrega?'var(--accent)':'var(--t3)'};cursor:pointer;font-size:10px;font-weight:700">⊞ Aggrega</button>`;
+
+  // ── Riga delta inter-anno sotto le colonne ──
+  const txDeltaRow = years.length > 1 ? (() => {
+    const first = totPerAnno[0], last = totPerAnno[totPerAnno.length-1];
+    const diff = last - first;
+    const pct  = first > 0 ? (diff/first*100).toFixed(0) : null;
+    const col  = diff > 0 ? 'var(--red)' : diff < 0 ? 'var(--green)' : 'var(--t3)';
+    const arrow= diff > 0 ? ' ▲' : diff < 0 ? ' ▼' : '';
+    return `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span style="font-size:11px;color:var(--t3)">Δ ${years[0]} → ${years[years.length-1]}</span>
+      <span style="font-size:12px;font-weight:800;color:${col}">${diff===0?'—':(diff>0?'+':'')+eur(Math.abs(diff))+arrow}</span>
+      ${pct!==null?`<span style="font-size:11px;font-weight:700;color:${col}">${diff>0?'+':''}${pct}%</span>`:''}
+    </div>`;
+  })() : '';
+
   document.getElementById('cat-drill-title').innerHTML =
     `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colore};margin-right:6px"></span>${catNome}`;
   document.getElementById('cat-drill-sub').textContent =
@@ -8444,7 +8532,13 @@ function _bilOpenCatDrill(catNome, years, months) {
   document.getElementById('cat-drill-body').innerHTML = `
     <div style="margin-bottom:16px">${tabella}</div>
     <div class="sec-title" style="margin-bottom:8px">Trend annuale</div>
-    <div style="position:relative;height:200px;margin-bottom:8px"><canvas id="${chartId}"></canvas></div>
+    <div style="position:relative;height:200px;margin-bottom:16px"><canvas id="${chartId}"></canvas></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="sec-title" style="margin-bottom:0">Transazioni</div>
+      ${toggleAggrega}
+    </div>
+    <div style="display:flex;gap:0;overflow-x:auto">${txCols}</div>
+    ${txDeltaRow}
   `;
 
   // Render grafico dopo che il DOM è aggiornato
@@ -8612,6 +8706,49 @@ function _bilOpenEnCatDrill(catNome, years, months) {
 
   document.getElementById('encat-drill-title').innerHTML=`<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colore};margin-right:6px"></span>${catNome}`;
   document.getElementById('encat-drill-sub').textContent=`${periodoLabel} · ${years.length} anni · totale aggregato ${eur(totGlobale)}`;
+
+  // ── Raccogli transazioni reali per anno×mese ──
+  const txByYrMo={}; years.forEach(yr=>{txByYrMo[yr]={};months.forEach(mo=>{txByYrMo[yr][mo]=[];});});
+  DB.datiEntrate.forEach(r=>{
+    if(!r.Data) return;
+    const yrStr=r.Data.slice(0,4), mo=parseInt(r.Data.slice(5,7));
+    if(!years.includes(yrStr)||!months.includes(mo)) return;
+    const c=DB.categorieEntrate.find(c=>c.ID===r.IDCategoria);
+    if((c?c.Nome:'—')!==catNome) return;
+    txByYrMo[yrStr][mo].push(r);
+  });
+  years.forEach(yr=>months.forEach(mo=>txByYrMo[yr][mo].sort((a,b)=>b.Data.localeCompare(a.Data))));
+
+  const ML2=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const aggregaEn = localStorage.getItem('catDrillAggrega') === '1';
+  const buildEnRows = (txs, agg) => {
+    if (!agg) return txs.map(r=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:6px"><span style="font-size:10px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${r.Descrizione||''}">${r.Descrizione||'—'}</span><span style="font-size:9px;color:var(--t3);white-space:nowrap">${r.Data.slice(8)}</span><span style="font-size:10px;color:var(--green);font-weight:600;white-space:nowrap">+${eur(r.Importo)}</span></div>`).join('');
+    const map={};
+    txs.forEach(r=>{const k=(r.Descrizione||'—').toLowerCase().trim();if(!map[k])map[k]={desc:r.Descrizione||'—',tot:0,n:0};map[k].tot+=r.Importo;map[k].n++;});
+    return Object.values(map).sort((a,b)=>b.tot-a.tot).map(g=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:6px"><span style="font-size:10px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${g.desc}</span><span style="font-size:9px;color:var(--t3);white-space:nowrap">×${g.n}</span><span style="font-size:10px;color:var(--green);font-weight:600;white-space:nowrap">+${eur(g.tot)}</span></div>`).join('');
+  };
+  const txCols=years.map(yr=>{
+    const rows=months.map(mo=>{
+      const txs=txByYrMo[yr][mo];
+      if(!txs.length) return '';
+      return `<div style="font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;padding:8px 0 2px">${ML2[mo-1]}</div>${buildEnRows(txs, aggregaEn)}`;
+    }).join('');
+    const totAnno=totPerAnno[years.indexOf(yr)];
+    const nTx=months.reduce((s,mo)=>s+txByYrMo[yr][mo].length,0);
+    const media=nTx>0?totAnno/nTx:0;
+    const totaleFooter=`<div style="border-top:2px solid var(--b2);margin-top:8px;padding-top:6px"><div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--t);padding:2px 0"><span>Totale (${nTx} mov.)</span><span style="color:var(--green)">+${eur(totAnno)}</span></div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);padding:2px 0"><span>Media/mov.</span><span>+${eur(media)}</span></div></div>`;
+    return `<div style="flex:1;min-width:0;padding:0 4px"><div style="font-size:11px;font-weight:800;color:${yrColor(yr)};padding:6px 4px 4px;border-bottom:2px solid ${yrColor(yr)};margin-bottom:4px">${yr} <span style="font-size:10px;font-weight:400;opacity:.7">${eur(totAnno)}</span></div>${rows||'<div style="font-size:10px;color:var(--t3);padding:8px 0">Nessuna transazione</div>'}${totaleFooter}</div>`;
+  }).join('<div style="width:1px;background:var(--b2);margin:0 4px;align-self:stretch"></div>');
+  const toggleAggregaEn=`<button onclick="localStorage.setItem('catDrillAggrega',localStorage.getItem('catDrillAggrega')==='1'?'0':'1');_bilOpenEnCatDrill('${catNome.replace(/'/g,"\'")}',_bilCatDrillCtx.years,_bilCatDrillCtx.months)" style="padding:3px 10px;border-radius:6px;border:1px solid ${aggregaEn?'var(--accent)':'var(--b2)'};background:${aggregaEn?'rgba(79,142,247,0.15)':'transparent'};color:${aggregaEn?'var(--accent)':'var(--t3)'};cursor:pointer;font-size:10px;font-weight:700">⊞ Aggrega</button>`;
+
+  const txDeltaRowEn = years.length > 1 ? (() => {
+    const first=totPerAnno[0], last=totPerAnno[totPerAnno.length-1], diff=last-first;
+    const pct=first>0?(diff/first*100).toFixed(0):null;
+    const col=diff>0?'var(--green)':diff<0?'var(--red)':'var(--t3)';
+    const arrow=diff>0?' ▲':diff<0?' ▼':'';
+    return `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-size:11px;color:var(--t3)">Δ ${years[0]} → ${years[years.length-1]}</span><span style="font-size:12px;font-weight:800;color:${col}">${diff===0?'—':(diff>0?'+':'')+eur(Math.abs(diff))+arrow}</span>${pct!==null?`<span style="font-size:11px;font-weight:700;color:${col}">${diff>0?'+':''}${pct}%</span>`:''}</div>`;
+  })() : '';
+
   document.getElementById('encat-drill-body').innerHTML=`
     <div style="margin-bottom:16px"><div style="overflow-x:auto">
       <table style="min-width:100%;border-collapse:collapse">
@@ -8622,7 +8759,13 @@ function _bilOpenEnCatDrill(catNome, years, months) {
       </table>
     </div></div>
     <div class="sec-title" style="margin-bottom:8px">Trend annuale</div>
-    <div style="position:relative;height:200px;margin-bottom:8px"><canvas id="chart-encat-drill-trend"></canvas></div>`;
+    <div style="position:relative;height:200px;margin-bottom:16px"><canvas id="chart-encat-drill-trend"></canvas></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="sec-title" style="margin-bottom:0">Transazioni</div>
+      ${toggleAggregaEn}
+    </div>
+    <div style="display:flex;gap:0;overflow-x:auto">${txCols}</div>
+    ${txDeltaRowEn}`;
 
   requestAnimationFrame(()=>{
     makeChart('chart-encat-drill-trend',{
