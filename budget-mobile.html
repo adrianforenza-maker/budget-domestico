@@ -301,6 +301,8 @@ select.form-ctrl { background-image: url("data:image/svg+xml,%3Csvg xmlns='http:
     <div class="card-sub" id="kpi-pct">—</div>
   </div>
 
+  <div id="dash-modo-toggle" style="display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--border);margin-bottom:12px"></div>
+
   <div class="section-hdr">Ultime transazioni</div>
   <div class="tx-list" id="recent-list">
     <div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Nessuna transazione questo mese</div></div>
@@ -1551,11 +1553,30 @@ function renderDashboard() {
   //  il deletedLog li traccia — in realtà non serve qui perché saveRecords li rimuove subito)
   // → i totali sono già corretti grazie a localMonthDeduped che usa localRecords aggiornati
 
-  const saldo = totEn - totSp;
-  const pct   = totEn > 0 ? Math.min(100, (saldo/totEn)*100) : 0;
+  // ── Entrate mese precedente (stesso snap già usato nel Bilancio)
+  const modo = localStorage.getItem('bilModoEntrate') || snap?.modoEntrate || 'prec';
+  const [cy, cm] = currentMonth.split('-').map(Number);
+  const prevDate = new Date(cy, cm-2, 1);
+  const prevYM   = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
+  let totEnPrec = 0;
+  if (snap) {
+    const mPrec = snap.months.find(m => m.ym === prevYM);
+    if (mPrec) totEnPrec = mPrec.entrate || 0;
+  }
+  // Record locali mese precedente non in snap
+  const snapPrecKeys = new Set(
+    snap ? (snap.recent||[]).filter(r=>r.data&&r.data.startsWith(prevYM)).map(r=>`${r.data}|${r.desc}|${r.importo}`) : []
+  );
+  totEnPrec += localRecords.filter(r=>ym(r.data)===prevYM && r.tipo==='en')
+    .filter(r=>!snapPrecKeys.has(`${r.data}|${r.desc||''}|${r.importo}`))
+    .reduce((s,r)=>s+r.importo, 0);
+
+  const totEnDisplay = modo === 'prec' ? totEnPrec : totEn;
+  const saldo = totEnDisplay - totSp;
+  const pct   = totEnDisplay > 0 ? Math.min(100, (saldo/totEnDisplay)*100) : 0;
 
   document.getElementById('month-label').textContent = fmtMonth(currentMonth);
-  document.getElementById('kpi-en').textContent  = '€ ' + eur(totEn);
+  document.getElementById('kpi-en').textContent  = '€ ' + eur(totEnDisplay);
   document.getElementById('kpi-sp').textContent  = '€ ' + eur(totSp);
   const sEl = document.getElementById('kpi-saldo');
   sEl.textContent = (saldo<0?'-':'') + '€ ' + eur(Math.abs(saldo));
@@ -1563,6 +1584,14 @@ function renderDashboard() {
   document.getElementById('kpi-bar').style.width      = Math.max(0,pct) + '%';
   document.getElementById('kpi-bar').style.background = pct >= 20 ? 'var(--green)' : pct >= 0 ? 'var(--amber)' : 'var(--red)';
   document.getElementById('kpi-pct').textContent      = pct.toFixed(1) + '% di risparmio';
+
+  // Toggle — rispecchia stato corrente (stessa chiave del Bilancio)
+  const toggleEl = document.getElementById('dash-modo-toggle');
+  if (toggleEl) {
+    toggleEl.innerHTML =
+      `<button onclick="setBilModo('prec');renderDashboard()" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:11px;font-weight:700;background:${modo==='prec'?'var(--accent)':'transparent'};color:${modo==='prec'?'#fff':'var(--t3)'}">📅 Mese Prec.</button>
+       <button onclick="setBilModo('corrente');renderDashboard()" style="flex:1;padding:8px;border:none;cursor:pointer;font-size:11px;font-weight:700;background:${modo==='corrente'?'var(--green)':'transparent'};color:${modo==='corrente'?'#fff':'var(--t3)'}">📆 Stesso Mese</button>`;
+  }
 
   // ── Transazioni recenti: snap + locali mescolati e ordinati ──
   const el = document.getElementById('recent-list');
