@@ -14977,7 +14977,7 @@ function openBulkEdit(ctx) {
   document.getElementById('bulk-edit-subtitle').textContent =
     sel.size + ' record selezionat' + (sel.size===1?'o':'i') + ' — compila solo i campi da modificare';
 
-  const catOpts = '<option value="">— invariata —</option>' +
+  const catOpts = '<option value="" selected>— invariata —</option>' +
     cats.map(c => '<option value="' + c.ID + '">' + c.Nome + '</option>').join('');
 
   document.getElementById('bulk-edit-fields').innerHTML =
@@ -15084,6 +15084,7 @@ async function applyBulkEdit() {
 window.openBulkEdit = openBulkEdit;
 window.closeBulkEdit = closeBulkEdit;
 window.applyBulkEdit = applyBulkEdit;
+window._confirmDialog = _confirmDialog;
 
 init().then(() => { initNavWidgets(); setTimeout(_checkAutoInsertPreferiti, 1200); });
 </script>
