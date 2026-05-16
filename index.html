@@ -15035,10 +15035,6 @@ async function applyBulkEdit() {
   }
 
   const ids = Array.from(sel);
-
-  // Chiude il modale bulk PRIMA di mostrare il confirm, altrimenti rimane sopra
-  closeBulkEdit();
-
   const ok = await _confirmDialog({
     title: 'Modifica massiva',
     msg: 'Applicare le modifiche a ' + ids.length + ' record? L\u2019operazione non \u00e8 reversibile.',
@@ -15046,7 +15042,9 @@ async function applyBulkEdit() {
     icon: '\u270f\ufe0f',
     danger: false
   });
-  if (!ok) { openBulkEdit(ctx); return; }
+  if (!ok) return;
+
+  closeBulkEdit();
 
   let updated = 0;
   for (const id of ids) {
@@ -15057,21 +15055,23 @@ async function applyBulkEdit() {
     if (hasData)      patch.Data        = newData;
     if (hasDesc)      patch.Descrizione = newDesc;
     if (hasImporto)   patch.Importo     = parseFloat(newImportoS);
-    if (hasCat)       patch.IDCategoria = parseInt(newCat);
+    if (hasCat) {
+      patch.IDCategoria = parseInt(newCat);
+      patch.Categoria   = '';  // forza risoluzione nome via IDCategoria in saveSpesa/saveEntrata
+    }
     if (noteModified) patch.Note        = newNote;
 
     try {
       const res = tipo === 'spesa'
         ? await window.budgetAPI.saveSpesa(patch)
         : await window.budgetAPI.saveEntrata(patch);
-      if (res.success) {
-        // Versione web: ricarica sempre da Supabase dopo ogni save
-        const reload = await window.budgetAPI.loadData();
-        if (reload.success) DB = reload.data;
-        updated++;
-      }
+      if (res.success) updated++;
     } catch(e) { console.error('bulkEdit error', id, e); }
   }
+
+  // Ricarica da Supabase una sola volta alla fine (non ad ogni iterazione)
+  const reload = await window.budgetAPI.loadData();
+  if (reload.success) DB = reload.data;
 
   if (ctx === 'sp') window._spSelected = new Set();
   else window._enSelected = new Set();
