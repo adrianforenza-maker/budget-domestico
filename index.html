@@ -15035,6 +15035,10 @@ async function applyBulkEdit() {
   }
 
   const ids = Array.from(sel);
+
+  // Chiude il modale bulk PRIMA di mostrare il confirm, altrimenti rimane sopra
+  closeBulkEdit();
+
   const ok = await _confirmDialog({
     title: 'Modifica massiva',
     msg: 'Applicare le modifiche a ' + ids.length + ' record? L\u2019operazione non \u00e8 reversibile.',
@@ -15042,9 +15046,7 @@ async function applyBulkEdit() {
     icon: '\u270f\ufe0f',
     danger: false
   });
-  if (!ok) return;
-
-  closeBulkEdit();
+  if (!ok) { openBulkEdit(ctx); return; }
 
   let updated = 0;
   for (const id of ids) {
