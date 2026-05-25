@@ -1077,9 +1077,20 @@ async function driveUploadCSV() {
       throw new Error(`Upload fallito: ${uploadResp.status} — ${errText.slice(0,120)}`);
     }
 
+    // Marca i record inviati come exported:true — così al prossimo sync vengono rimossi
+    // dal localStorage anche se il desktop li ha cancellati dopo averli ricevuti
+    if (records.length) {
+      const sentIds = new Set(records.map(r => r.id).filter(Boolean));
+      const allAfter = JSON.parse(localStorage.getItem(DB_KEY) || '[]').map(r => {
+        if (sentIds.has(r.id) || records.some(s => s.data===r.data && s.desc===r.desc && s.importo===r.importo))
+          return { ...r, exported: true };
+        return r;
+      });
+      saveRecords(allAfter);
+    }
+
     // Non svuota deleted_log — verrà pulito solo quando arriva il nuovo snapshot dal desktop
     // (che conferma che il CSV è stato processato)
-    // Non marca come exported (vedi logica exportCSV) — nessun salvataggio necessario
     renderExportStats();
     const nDel = delLogD.length;
     showToast(`✓ ${records.length} record + ${nDel} cancellaz. inviati su Drive`, 'success');
@@ -2392,10 +2403,19 @@ function exportCSV() {
   a.download = `budget-iphone-${now.toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  // Non svuota deleted_log — verrà pulito solo all'arrivo del nuovo snapshot dal desktop
 
-  // Non marca come exported — il CSV successivo includerà ancora questi record
-  // finché il desktop non li importa. La deduplicazione sul desktop evita duplicati.
+  // Marca i record inclusi nel CSV come exported:true
+  // così al prossimo sync vengono rimossi anche se il desktop li ha cancellati
+  if (records.length) {
+    const exportedKeys = new Set(records.map(r => `${r.data}|${r.desc}|${r.importo}`));
+    const allUpdated = allRecords.map(r => {
+      const k = `${r.data}|${r.desc}|${r.importo}`;
+      return exportedKeys.has(k) ? { ...r, exported: true } : r;
+    });
+    saveRecords(allUpdated);
+  }
+
+  // Non svuota deleted_log — verrà pulito solo all'arrivo del nuovo snapshot dal desktop
   showToast(`✓ ${records.length} record esportati${delLog.length?' + '+delLog.length+' cancellaz.':''}`);
   renderExportStats();
 }
