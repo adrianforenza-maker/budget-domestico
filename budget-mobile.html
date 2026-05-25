@@ -1521,6 +1521,17 @@ function renderDashboard() {
   if (snap) {
     const mSnap = snap.months.find(m => m.ym === currentMonth);
     if (mSnap) { totEn = mSnap.entrate || 0; totSp = mSnap.spese || 0; }
+    else {
+      // Il mese corrente non è ancora aggregato in snap.months (snapshot non aggiornato):
+      // calcola i totali direttamente da snap.recent per non perdere le transazioni
+      const recentThisMonth = (snap.recent||[]).filter(r => r.data && r.data.startsWith(currentMonth));
+      recentThisMonth.forEach(r => {
+        const imp = parseFloat(r.importo||0);
+        if (imp <= 0) return;
+        if ((r.tipo||'spesa') === 'entrata') totEn += imp;
+        else totSp += imp;
+      });
+    }
 
     // Sottrai hidden_snap dal totale del mese corrente
     // Usa i months (completi) non snap.recent (solo 30 record)
