@@ -965,7 +965,8 @@ async function driveUploadCSV() {
     const records = allRecords.filter(r => !r.exported);
     const DKEY_PRE = 'budget_deleted_log';
     const delLogPre = JSON.parse(localStorage.getItem(DKEY_PRE)||'[]');
-    if (!records.length && !delLogPre.length) {
+    const delLogPreToSend = delLogPre.filter(d => !d.isLocal); // solo cancellazioni da propagare al desktop
+    if (!records.length && !delLogPreToSend.length) {
       showToast('⚠ Nessun record né cancellazione da inviare su Drive', 'error');
       return;
     }
