@@ -290,7 +290,7 @@ th.sortable:not(.asc):not(.desc) .sort-arrow::after{content:'⇅'}
 .pref-btn-sm.del:hover{color:var(--red);border-color:var(--red)}
 .pref-empty{color:var(--t3);font-size:13px;padding:20px;text-align:center;border:1px dashed var(--b2);border-radius:10px;margin-top:14px}
 /* ── MODAL CONFIRM CUSTOM ── */
-.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:600;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .confirm-overlay.open{display:flex}
 .confirm-box{background:var(--bg2);border:1px solid var(--b3);border-radius:16px;padding:28px 28px 22px;width:360px;max-width:90vw;animation:slideUp .18s ease;box-shadow:0 24px 64px rgba(0,0,0,.6)}
 .confirm-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 16px;flex-shrink:0}
@@ -839,7 +839,6 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <div class="multi-del-bar" id="sp-multi-bar">
       <span id="sp-multi-count">0 selezionati</span>
       <button class="btn-secondary" style="font-size:11px;padding:3px 10px;color:var(--red);border-color:var(--red)" onclick="deleteMultiple('spesa')">🗑 Elimina selezionati</button>
-      <button class="btn-secondary" style="font-size:11px;padding:3px 10px;color:var(--cyan);border-color:var(--cyan)" onclick="openBulkEdit('sp')">✏️ Modifica massiva</button>
       <button class="btn-secondary" style="font-size:11px;padding:3px 10px" onclick="clearMultiSelect('sp')">Annulla selezione</button>
     </div>
     <div class="tbl-wrap"><table>
@@ -917,7 +916,6 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <div class="multi-del-bar" id="en-multi-bar">
       <span id="en-multi-count">0 selezionati</span>
       <button class="btn-secondary" style="font-size:11px;padding:3px 10px;color:var(--red);border-color:var(--red)" onclick="deleteMultiple('entrata')">🗑 Elimina selezionati</button>
-      <button class="btn-secondary" style="font-size:11px;padding:3px 10px;color:var(--cyan);border-color:var(--cyan)" onclick="openBulkEdit('en')">✏️ Modifica massiva</button>
       <button class="btn-secondary" style="font-size:11px;padding:3px 10px" onclick="clearMultiSelect('en')">Annulla selezione</button>
     </div>
     <div class="tbl-wrap"><table>
@@ -1812,6 +1810,15 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
       <div style="font-size:10px;color:var(--t3);margin-top:6px;padding-left:23px">
         Richiede che la frequenza sia impostata e la data di inizio sia compilata.
       </div>
+      <!-- Finestra di recupero scadenze mancate -->
+      <div id="pref-recovery-row" style="display:none;margin-top:10px;padding-left:23px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t2)">
+          <span>Recupera se mancato entro</span>
+          <input type="number" class="form-ctrl" id="pref-recovery-days" min="0" max="30" value="0" style="width:60px;text-align:center">
+          <span>giorni</span>
+        </label>
+        <div style="font-size:10px;color:var(--t3);margin-top:4px">0 = nessun recupero (comportamento standard)</div>
+      </div>
       <!-- Opzioni pianificazione avanzata — visibili solo se autoInsert attivo -->
       <div id="pref-auto-schedule" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--b2)">
         <!-- Mensile: giorno del mese -->
@@ -1975,27 +1982,6 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
       <button class="modal-close" data-action="act49">✕</button>
     </div>
     <div id="form-body"></div>
-  </div>
-</div>
-
-<!-- ═══════ MODALE MODIFICA MASSIVA ═══════ -->
-<div class="modal-overlay" id="modal-bulk-edit" style="z-index:1400" onclick="if(event.target===this)closeBulkEdit()">
-  <div class="modal center" style="max-width:480px;width:95%">
-    <div class="modal-hdr">
-      <div>
-        <div class="modal-title">✏️ Modifica massiva</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px" id="bulk-edit-subtitle">N record selezionati</div>
-      </div>
-      <button class="modal-close" onclick="closeBulkEdit()">✕</button>
-    </div>
-    <div style="padding:16px 20px 8px">
-      <p style="font-size:11px;color:var(--t3);margin:0 0 14px">Compila solo i campi che vuoi modificare. I campi lasciati vuoti non verranno alterati.</p>
-      <div class="form-grid" id="bulk-edit-fields"></div>
-    </div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 20px 18px;border-top:1px solid var(--b)">
-      <button class="btn-secondary" onclick="closeBulkEdit()">Annulla</button>
-      <button class="btn-primary" onclick="applyBulkEdit()">✏️ Applica a tutti</button>
-    </div>
   </div>
 </div>
 
@@ -7817,6 +7803,9 @@ function editPref(idx) {
   if (p.scheduleYearDay) { const el = document.getElementById('pref-giorno-anno'); if (el) el.value = p.scheduleYearDay; }
   if (p.scheduleYearMonth) { const el = document.getElementById('pref-mese-anno'); if (el) el.value = p.scheduleYearMonth; }
   if (p.scheduleOgniGiorni) { const el = document.getElementById('pref-ogni-giorni'); if (el) el.value = p.scheduleOgniGiorni; }
+  // Carica finestra di recupero
+  const recovEl = document.getElementById('pref-recovery-days');
+  if (recovEl) recovEl.value = p.recoveryDays || 0;
   document.getElementById('pref-tipo').onchange = () => _updatePrefCatSelect(document.getElementById('pref-tipo').value);
   document.getElementById('pref-freq').onchange = () => _toggleAutoSchedule();
   _toggleAutoSchedule();
@@ -7869,6 +7858,9 @@ function savePref() {
   }
 
   const pref = { tipo, descrizione: desc, importo, idCat, freq, note, dal, al, autoInsert, ...schedule };
+  if (autoInsert) {
+    pref.recoveryDays = parseInt(document.getElementById('pref-recovery-days')?.value || '0') || 0;
+  }
   if (_prefEditIdx !== null) list[_prefEditIdx] = pref;
   else list.push(pref);
   savePreferiti(list);
@@ -9797,33 +9789,10 @@ function renderPagination(containerId, current, total, cb) {
 }
 
 function populateCatFilters() {
-  // Salva la selezione corrente prima di ricostruire il dropdown
-  const prevSp = window._spCatSelected ? [...window._spCatSelected] : [];
-  const prevEn = window._enCatSelected ? [...window._enCatSelected] : [];
   window._spCatSelected = [];
   window._enCatSelected = [];
   buildCatDropdown('sp', DB.categorie);
   buildCatDropdown('en', DB.categorieEntrate);
-  // Ripristina la selezione precedente (solo gli ID ancora esistenti)
-  if (prevSp.length) _restoreCatFilter('sp', prevSp);
-  if (prevEn.length) _restoreCatFilter('en', prevEn);
-}
-
-function _restoreCatFilter(ctx, prevIds) {
-  const dd = document.getElementById(ctx + '-cat-dropdown');
-  if (!dd) return;
-  const cats = ctx === 'sp' ? DB.categorie : DB.categorieEntrate;
-  const validIds = new Set(cats.map(c => c.ID));
-  const restored = prevIds.filter(id => validIds.has(id));
-  if (!restored.length) return;
-  dd.querySelectorAll('input[type=checkbox]').forEach(i => {
-    if (restored.includes(parseInt(i.value))) i.checked = true;
-  });
-  window[`_${ctx}CatSelected`] = restored;
-  const label = document.getElementById(ctx + '-cat-label');
-  if (label) label.textContent = `${restored.length} categor${restored.length===1?'ia':'ie'}`;
-  const btn = document.getElementById(ctx + '-cat-btn');
-  if (btn) btn.classList.toggle('active', restored.length > 0);
 }
 
 function buildCatDropdown(ctx, cats) {
@@ -14042,6 +14011,9 @@ function _toggleAutoSchedule() {
     const el = document.getElementById(`pref-sched-${f}`);
     if (el) el.style.display = (autoChecked && freq === f) ? 'block' : 'none';
   });
+  // Mostra/nasconde il campo finestra di recupero
+  const recoveryRow = document.getElementById('pref-recovery-row');
+  if (recoveryRow) recoveryRow.style.display = autoChecked ? 'block' : 'none';
 }
 
 window._toggleAutoSchedule = _toggleAutoSchedule;
@@ -14818,22 +14790,34 @@ async function _checkAutoInsertPreferiti() {
     if (!p.dal) continue;
     if (p.dal > today) continue;
     if (p.al && p.al < today) continue;
-    if (_isSkippedToday(p)) continue; // saltato esplicitamente oggi
 
-    if (_isAutoInsertDue(p, today)) {
-      const arr = p.tipo === 'spesa' ? DB.dati : DB.datiEntrate;
-      const alreadyToday = arr.some(r =>
-        r.Data === today &&
-        r.Descrizione === p.descrizione &&
-        Math.abs(r.Importo - p.importo) < 0.01
-      );
-      if (!alreadyToday) toInsert.push(p);
+    const recoveryDays = p.recoveryDays || 0;
+
+    for (let daysBack = 0; daysBack <= recoveryDays; daysBack++) {
+      const checkDate = new Date();
+      checkDate.setDate(checkDate.getDate() - daysBack);
+      const checkISO = _dateToISO(checkDate);
+
+      if (checkISO < p.dal) break;
+      if (checkISO > today) continue;
+      if (daysBack === 0 && _isSkippedToday(p)) continue;
+
+      if (_isAutoInsertDue(p, checkISO)) {
+        const arr = p.tipo === 'spesa' ? DB.dati : DB.datiEntrate;
+        const alreadyExists = arr.some(r =>
+          r.Data === checkISO &&
+          r.Descrizione === p.descrizione &&
+          Math.abs(r.Importo - p.importo) < 0.01
+        );
+        if (!alreadyExists) {
+          toInsert.push({ ...p, _recoveryDate: checkISO, _daysBack: daysBack });
+          break;
+        }
+      }
     }
   }
 
   if (!toInsert.length) return;
-
-  // Mostra modal con Sì/No per ognuno
   _showAutoInsertModal(toInsert, today);
 }
 
@@ -14849,11 +14833,15 @@ function _showAutoInsertModal(toInsert, today) {
   const rowsHtml = toInsert.map((p, i) => {
     const sign = p.tipo === 'spesa' ? '-' : '+';
     const col = p.tipo === 'spesa' ? 'var(--red)' : 'var(--green)';
+    const recovLabel = p._daysBack > 0
+      ? `<span style="font-size:10px;color:var(--amber);margin-left:6px">⚠ recupero ${formatDate(p._recoveryDate)}</span>`
+      : '';
     return `<div class="auto-skip-row" id="auto-row-${i}">
       <div class="skip-name">
         <strong>${p.descrizione}</strong>
         <span style="font-size:11px;color:${col};margin-left:8px">${sign}${eur(p.importo)}</span>
         <span style="font-size:10px;color:var(--t3);margin-left:6px">${FREQ_LABELS[p.freq]||p.freq}</span>
+        ${recovLabel}
       </div>
       <div class="skip-toggle">
         <button class="skip-yes-btn active" id="auto-yes-${i}" onclick="_autoToggle(${i},true)">✓ Sì</button>
@@ -14924,7 +14912,7 @@ async function _autoInsertConfirm() {
       continue;
     }
     const record = {
-      Data: _today,
+      Data: p._recoveryDate || _today,  // usa la data originale mancata se è un recupero
       Descrizione: p.descrizione,
       Importo: p.importo,
       IDCategoria: parseInt(p.idCat),
@@ -14961,132 +14949,6 @@ window._bilCmpSetAllMonths = _bilCmpSetAllMonths;
 window.closeCatRiepilogo = closeCatRiepilogo;
 window._bilOpenCatDrill = _bilOpenCatDrill;
 window.closeCatDrill = closeCatDrill;
-
-// ═══════════════════════════════════════════════════
-//  MODIFICA MASSIVA — bulk edit su selezione multipla
-// ═══════════════════════════════════════════════════
-let _bulkEditCtx = null;
-
-function openBulkEdit(ctx) {
-  const sel = ctx === 'sp' ? window._spSelected : window._enSelected;
-  if (!sel || !sel.size) return;
-  _bulkEditCtx = ctx;
-  const tipo = ctx === 'sp' ? 'spesa' : 'entrata';
-  const cats = tipo === 'spesa' ? DB.categorie : DB.categorieEntrate;
-
-  document.getElementById('bulk-edit-subtitle').textContent =
-    sel.size + ' record selezionat' + (sel.size===1?'o':'i') + ' — compila solo i campi da modificare';
-
-  const catOpts = '<option value="" selected>— invariata —</option>' +
-    cats.map(c => '<option value="' + c.ID + '">' + c.Nome + '</option>').join('');
-
-  document.getElementById('bulk-edit-fields').innerHTML =
-    '<div class="form-group">' +
-      '<label class="form-label">Data</label>' +
-      '<input type="date" class="form-ctrl" id="bulk-data" value="">' +
-    '</div>' +
-    '<div class="form-group">' +
-      '<label class="form-label">Descrizione</label>' +
-      '<input type="text" class="form-ctrl" id="bulk-desc" value="" placeholder="Lascia vuoto per non modificare">' +
-    '</div>' +
-    '<div class="form-group">' +
-      '<label class="form-label">Importo (\u20ac)</label>' +
-      '<input type="number" class="form-ctrl" id="bulk-importo" value="" step="0.01" min="0" placeholder="Lascia vuoto per non modificare">' +
-    '</div>' +
-    '<div class="form-group">' +
-      '<label class="form-label">Categoria</label>' +
-      '<select class="form-ctrl" id="bulk-cat">' + catOpts + '</select>' +
-    '</div>' +
-    '<div class="form-group" style="grid-column:1/-1">' +
-      '<label class="form-label">Note <span style="font-size:10px;color:var(--t3)">(lascia vuoto per non modificare)</span></label>' +
-      '<input type="text" class="form-ctrl" id="bulk-note" value="" placeholder="Lascia vuoto per non modificare" oninput="this.dataset.modified=\'1\'">' +
-    '</div>';
-
-  document.getElementById('modal-bulk-edit').classList.add('open');
-}
-
-function closeBulkEdit() {
-  document.getElementById('modal-bulk-edit').classList.remove('open');
-  _bulkEditCtx = null;
-}
-
-async function applyBulkEdit() {
-  if (!_bulkEditCtx) return;
-  const ctx = _bulkEditCtx;
-  const tipo = ctx === 'sp' ? 'spesa' : 'entrata';
-  const sel = ctx === 'sp' ? window._spSelected : window._enSelected;
-  if (!sel || !sel.size) return;
-
-  const newData     = document.getElementById('bulk-data').value;
-  const newDesc     = document.getElementById('bulk-desc').value.trim();
-  const newImportoS = document.getElementById('bulk-importo').value;
-  const newCat      = document.getElementById('bulk-cat').value;
-  const noteEl      = document.getElementById('bulk-note');
-  const newNote     = noteEl.value;
-  const noteModified = noteEl.dataset.modified === '1';
-
-  const hasData    = !!newData;
-  const hasDesc    = !!newDesc;
-  const hasImporto = newImportoS !== '' && !isNaN(parseFloat(newImportoS)) && parseFloat(newImportoS) > 0;
-  const hasCat     = !!newCat;
-
-  if (!hasData && !hasDesc && !hasImporto && !hasCat && !noteModified) {
-    showToast('Nessun campo da modificare compilato', 'error'); return;
-  }
-
-  const ids = Array.from(sel);
-  const ok = await _confirmDialog({
-    title: 'Modifica massiva',
-    msg: 'Applicare le modifiche a ' + ids.length + ' record? L\u2019operazione non \u00e8 reversibile.',
-    ok: 'Applica',
-    icon: '\u270f\ufe0f',
-    danger: false
-  });
-  if (!ok) return;
-
-  closeBulkEdit();
-
-  let updated = 0;
-  for (const id of ids) {
-    const dbArr = tipo === 'spesa' ? DB.dati : DB.datiEntrate;
-    const record = dbArr.find(r => r.ID === id);
-    if (!record) continue;
-    const patch = Object.assign({}, record);
-    if (hasData)      patch.Data        = newData;
-    if (hasDesc)      patch.Descrizione = newDesc;
-    if (hasImporto)   patch.Importo     = parseFloat(newImportoS);
-    if (hasCat) {
-      patch.IDCategoria = parseInt(newCat);
-      patch.Categoria   = '';  // forza risoluzione nome via IDCategoria in saveSpesa/saveEntrata
-    }
-    if (noteModified) patch.Note        = newNote;
-
-    try {
-      const res = tipo === 'spesa'
-        ? await window.budgetAPI.saveSpesa(patch)
-        : await window.budgetAPI.saveEntrata(patch);
-      if (res.success) updated++;
-    } catch(e) { console.error('bulkEdit error', id, e); }
-  }
-
-  // Ricarica da Supabase una sola volta alla fine (non ad ogni iterazione)
-  const reload = await window.budgetAPI.loadData();
-  if (reload.success) DB = reload.data;
-
-  if (ctx === 'sp') window._spSelected = new Set();
-  else window._enSelected = new Set();
-  _updateMultiBar(ctx);
-  populateCatFilters();
-  renderAll();
-  const st = await window.budgetAPI.getStatus();
-  updateStatus(st.connected ? 'mdb' : 'local', st.mdbPath);
-  showToast('\u270f\ufe0f ' + updated + ' record aggiornati', 'success');
-}
-
-window.openBulkEdit = openBulkEdit;
-window.closeBulkEdit = closeBulkEdit;
-window.applyBulkEdit = applyBulkEdit;
-window._confirmDialog = _confirmDialog;
 
 init().then(() => { initNavWidgets(); setTimeout(_checkAutoInsertPreferiti, 1200); });
 </script>
