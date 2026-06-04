@@ -2085,6 +2085,8 @@ async function init() {
       updateStatus('supabase', null);
       populateCatFilters();
       renderAll();
+      // Esegui il check DOPO che DB è popolato, non con timeout fisso
+      setTimeout(_checkAutoInsertPreferiti, 300);
     } else {
       showToast('Errore caricamento dati: ' + (res.error || 'sconosciuto'), 'error');
     }
@@ -14950,7 +14952,7 @@ window.closeCatRiepilogo = closeCatRiepilogo;
 window._bilOpenCatDrill = _bilOpenCatDrill;
 window.closeCatDrill = closeCatDrill;
 
-init().then(() => { initNavWidgets(); setTimeout(_checkAutoInsertPreferiti, 1200); });
+init().then(() => { initNavWidgets(); });
 </script>
 <!-- Google Identity Services — per Drive Sync desktop -->
 <script>
