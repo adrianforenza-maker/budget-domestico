@@ -85,7 +85,7 @@ function _normSpese(rows, cats) {
   return (rows || []).map((r, i) => ({
     ID:          i + 1,
     MdbID:       r.id,          // id Supabase usato come MdbID
-    Data:        r.data,
+    Data:        r.data ? String(r.data).slice(0, 10) : '',
     Descrizione: r.descrizione || '',
     Importo:     parseFloat(r.importo) || 0,
     IDCategoria: catMap[r.categoria?.toLowerCase()] || 1,
@@ -100,7 +100,7 @@ function _normEntrate(rows, cats) {
   return (rows || []).map((r, i) => ({
     ID:          i + 1,
     MdbID:       r.id,
-    Data:        r.data,
+    Data:        r.data ? String(r.data).slice(0, 10) : '',
     Descrizione: r.descrizione || '',
     Importo:     parseFloat(r.importo) || 0,
     IDCategoria: catMap[r.categoria?.toLowerCase()] || 1,
@@ -196,7 +196,7 @@ window.budgetAPI = {
         Categoria: catNome,
         Descrizione: row.descrizione,
         Importo:   row.importo,
-        Data:      row.data,
+        Data:      row.data ? String(row.data).slice(0, 10) : "",
         Note:      row.note
       };
       return { success: true, record: saved, supabaseSaved: true };
@@ -243,7 +243,7 @@ window.budgetAPI = {
         Categoria: catNome,
         Descrizione: row.descrizione,
         Importo:   row.importo,
-        Data:      row.data,
+        Data:      row.data ? String(row.data).slice(0, 10) : "",
         Note:      row.note
       };
       return { success: true, record: saved, supabaseSaved: true };
@@ -284,22 +284,11 @@ window.budgetAPI = {
 
       let res;
       if (record.ID && record.ID > 0) {
-        // Leggi il nome attuale prima di modificarlo (serve per propagare il rename)
-        const { data: existing } = await _sb.from(table).select('nome').eq('id', record.ID).single();
-        const oldNome = existing ? existing.nome : null;
-
         res = await _sb.from(table).update(row).eq('id', record.ID).select().single();
-        if (res.error) throw res.error;
-
-        // Se il nome è cambiato, propaga il nuovo nome alle transazioni collegate
-        if (oldNome && oldNome !== record.Nome) {
-          const txTable = tipo === 'spesa' ? 'spese' : 'entrate';
-          await _sb.from(txTable).update({ categoria: record.Nome }).eq('categoria', oldNome);
-        }
       } else {
         res = await _sb.from(table).insert(row).select().single();
-        if (res.error) throw res.error;
       }
+      if (res.error) throw res.error;
       record.ID = res.data.id;
       return { success: true, record };
     } catch (e) {
