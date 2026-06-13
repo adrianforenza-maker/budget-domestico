@@ -4677,7 +4677,9 @@ function _bilDataFor(yr, mo) {
 // ─────────────────────────────────────────────────────
 let _bilCmpMoSet = new Set([new Date().getMonth() + 1]); // mesi selezionati (multi-select)
 let _bilCmpYrSet = new Set();
-let _bilCatDrillCtx = { years: [], months: [] }; // contesto per drill categoria // anni selezionati con Ctrl+click (multi-select)
+let _bilCatDrillCtx = { years: [], months: [] }; // contesto per drill categoria (vista Anno: griglia anni×mesi)
+let _bilCatDrillPeriods = []; // contesto per drill categoria (vista Mese: lista periodi {label,mKey,enMKey})
+let _bilDrillAxisMode = 'years'; // 'years' = griglia anni×mesi, 'periods' = lista periodi liberi
 let _bilCmpOffset = 0;  // 0 = finestra più recente
 const _bilCmpWinSize = 8; // anni visibili
 
@@ -5219,6 +5221,7 @@ function _bilCmpOpenDrillYrSet() {
   const catSorted = Object.entries(byCat).sort((a,b)=>b[1].tot-a[1].tot);
   const maxCat = catSorted.length?catSorted[0][1].tot:1;
   _bilCatDrillCtx = { years, months };
+  _bilDrillAxisMode = 'years';
 
   // ── Aggregato entrate per categoria
   const byECat = {};
@@ -6037,7 +6040,7 @@ function _openBilDrill(yr, mo) {
 
     const pTotU = periodU.reduce((s,r) => s+r.Importo, 0);
     const pTotE = periodE.reduce((s,r) => s+r.Importo, 0);
-    periodTotals.push({ label: pLabel, totE: pTotE, totU: pTotU, bil: pTotE - pTotU });
+    periodTotals.push({ label: pLabel, totE: pTotE, totU: pTotU, bil: pTotE - pTotU, yr: y, mo: m, mKey, enMKey });
   });
 
   // Deduplica entrate (stesso record può apparire in più periodi se Dic è condiviso)
@@ -6055,19 +6058,19 @@ function _openBilDrill(yr, mo) {
     ? `Confronto — ${periodsToShow.length} periodi selezionati`
     : periodLabels[0];
 
-  // ── Determina se la selezione forma una "griglia pulita" anni×mesi
-  //    (un solo anno con N mesi, oppure più anni con tutti i 12 mesi in vista Anno)
-  //    necessaria per riusare i drill categoria con trend (_bilOpenCatDrill ecc.)
-  const selYears  = [...new Set(periodsToShow.map(p => p.yr))].sort((a,b) => a-b);
-  let selMonths, isCleanGrid;
+  // ── Determina l'asse di confronto per il drill categoria:
+  //    - vista Anno: asse = ANNI selezionati (griglia anni × 12 mesi, come oggi)
+  //    - vista Mese: asse = PERIODI selezionati (qualsiasi combinazione di mesi/anni,
+  //      anche a cavallo di un capodanno) — nuove funzioni "ByPeriods"
+  const isCleanGrid = true; // sempre vero: entrambi gli assi sono ora gestiti
   if (_bilP === 'Y') {
-    selMonths   = [1,2,3,4,5,6,7,8,9,10,11,12];
-    isCleanGrid = true;
+    const selYears = [...new Set(periodsToShow.map(p => p.yr))].sort((a,b) => a-b);
+    _bilCatDrillCtx = { years: selYears, months: [1,2,3,4,5,6,7,8,9,10,11,12] };
+    _bilDrillAxisMode = 'years';
   } else {
-    selMonths   = [...new Set(periodsToShow.map(p => p.mo))].sort((a,b) => a-b);
-    isCleanGrid = selYears.length === 1;
+    _bilCatDrillPeriods = periodTotals.map(p => ({ label: p.label, mKey: p.mKey, enMKey: p.enMKey }));
+    _bilDrillAxisMode = 'periods';
   }
-  if (isCleanGrid) _bilCatDrillCtx = { years: selYears, months: selMonths };
 
   // Riepilogo per categoria uscite
   const byCat = {};
@@ -6096,8 +6099,8 @@ function _openBilDrill(yr, mo) {
   document.getElementById('drill-sub').textContent = `${allUscite.length} uscite · ${allEnPrec.length} entrate rif.`;
   document.getElementById('drill-body').innerHTML = _bilDrillNavBar('both') + `
     ${isCleanGrid && (catSorted.length || eCatSorted.length) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;justify-content:flex-end">
-      ${catSorted.length ? `<button onclick="_bilOpenCatRiepilogo()" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(245,161,36,0.6);background:rgba(245,161,36,0.12);color:#f5a124;cursor:pointer;font-size:11px;font-weight:700">📊 Riepilogo uscite</button>` : ''}
-      ${eCatSorted.length ? `<button onclick="_bilOpenEnCatRiepilogo()" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(30,207,150,0.6);background:rgba(30,207,150,0.12);color:#1ecf96;cursor:pointer;font-size:11px;font-weight:700">📊 Riepilogo entrate</button>` : ''}
+      ${catSorted.length ? `<button onclick="${_bilDrillAxisMode==='years' ? '_bilOpenCatRiepilogo()' : '_bilOpenCatRiepilogoP(_bilCatDrillPeriods)'}" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(245,161,36,0.6);background:rgba(245,161,36,0.12);color:#f5a124;cursor:pointer;font-size:11px;font-weight:700">📊 Riepilogo uscite</button>` : ''}
+      ${eCatSorted.length ? `<button onclick="${_bilDrillAxisMode==='years' ? '_bilOpenEnCatRiepilogo()' : '_bilOpenEnCatRiepilogoP(_bilCatDrillPeriods)'}" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(30,207,150,0.6);background:rgba(30,207,150,0.12);color:#1ecf96;cursor:pointer;font-size:11px;font-weight:700">📊 Riepilogo entrate</button>` : ''}
     </div>` : ''}
     <div id="bil-sec-bil" class="kpi-grid" style="margin-bottom:16px">
       <div class="kpi"><div class="kpi-label">Bilancio</div>
@@ -6157,9 +6160,15 @@ function _openBilDrill(yr, mo) {
         drillBody._catClickBound = true;
         drillBody.addEventListener('click', function(e) {
           const item = e.target.closest('[data-catname]');
-          if (item) _bilOpenCatDrill(item.dataset.catname, _bilCatDrillCtx.years, _bilCatDrillCtx.months);
+          if (item) {
+            if (_bilDrillAxisMode === 'years') _bilOpenCatDrill(item.dataset.catname, _bilCatDrillCtx.years, _bilCatDrillCtx.months);
+            else _bilOpenCatDrillP(item.dataset.catname, _bilCatDrillPeriods);
+          }
           const eItem = e.target.closest('[data-encatname]');
-          if (eItem) _bilOpenEnCatDrill(eItem.dataset.encatname, _bilCatDrillCtx.years, _bilCatDrillCtx.months);
+          if (eItem) {
+            if (_bilDrillAxisMode === 'years') _bilOpenEnCatDrill(eItem.dataset.encatname, _bilCatDrillCtx.years, _bilCatDrillCtx.months);
+            else _bilOpenEnCatDrillP(eItem.dataset.encatname, _bilCatDrillPeriods);
+          }
         });
       }
     });
@@ -8923,6 +8932,487 @@ function closeEnCatDrill() {
   if(inner) inner.scrollTop=0;
   modal.classList.remove('open');
 }
+
+// ════════════════════════════════════════════════════════════════════════
+//  Drill categoria con asse "PERIODI" — generalizzazione per la vista Mese:
+//  ogni periodo selezionato (mese+anno, anche a cavallo di un capodanno)
+//  è una colonna/barra a sé, senza il vincolo della griglia anni×mesi.
+// ════════════════════════════════════════════════════════════════════════
+const _P_COLORS = ['#4f8ef7','#1ecf96','#f5a124','#e855ec','#22d4e0','#f38ba8','#a6e3a1','#cba6f7'];
+const _pColor = i => _P_COLORS[i % _P_COLORS.length];
+
+// ── Riepilogo categorie uscite per periodi selezionati ─────────────────
+function _bilOpenCatRiepilogoP(periods) {
+  if (!periods.length) return;
+  const first = periods[0], last = periods[periods.length-1];
+
+  const catData = {}; // { nome: { colore, totPerPeriodo: [v0,v1,...] } }
+  periods.forEach((p, i) => {
+    DB.dati.forEach(r => {
+      if (!r.Data || !r.Data.startsWith(p.mKey)) return;
+      const cat = DB.categorie.find(c => c.ID === r.IDCategoria);
+      const nome = cat ? cat.Nome : '—';
+      const colore = cat ? cat.Colore : '#94a3b8';
+      if (!catData[nome]) catData[nome] = { colore, totPerPeriodo: periods.map(()=>0) };
+      catData[nome].totPerPeriodo[i] += r.Importo;
+    });
+  });
+
+  const catSorted = Object.entries(catData).sort((a,b) =>
+    (b[1].totPerPeriodo[periods.length-1]||0) - (a[1].totPerPeriodo[periods.length-1]||0));
+
+  const totFirst = catSorted.reduce((s,[,d]) => s+(d.totPerPeriodo[0]||0), 0);
+  const totLast  = catSorted.reduce((s,[,d]) => s+(d.totPerPeriodo[periods.length-1]||0), 0);
+  const totDiff  = totLast - totFirst;
+  const totPct   = totFirst > 0 ? (totDiff/totFirst*100).toFixed(0) : null;
+
+  const TH='font-size:10px;padding:4px 8px;white-space:nowrap';
+  const TD='font-size:11px;padding:5px 8px;white-space:nowrap';
+  const TDN=TD+';text-align:right';
+  const thPeriods = periods.map((p,i) =>
+    `<th style="${TH};text-align:right;color:${_pColor(i)};border-bottom:2px solid ${_pColor(i)}">${p.label}</th>`).join('');
+  const deltaHdr = periods.length > 1
+    ? `<th style="${TH};text-align:right;color:var(--t3)">Δ ${first.label}→${last.label}</th><th style="${TH};text-align:right;color:var(--t3)">%</th>`
+    : '';
+
+  const rows = catSorted.map(([nome,{colore,totPerPeriodo}]) => {
+    const f = totPerPeriodo[0]||0, l = totPerPeriodo[periods.length-1]||0, diff = l-f;
+    const pct = f>0 ? (diff/f*100).toFixed(0) : null;
+    const dc = diff>0?'var(--red)':diff<0?'var(--green)':'var(--t3)';
+    const arrow = diff>0?' ▲':diff<0?' ▼':'';
+    const cells = totPerPeriodo.map(v => `<td style="${TDN};color:${v>0?'var(--red)':'var(--t3)'}">${v>0?eur(v):'—'}</td>`).join('');
+    const deltaCells = periods.length > 1
+      ? `<td style="${TDN};font-weight:700;color:${dc}">${diff===0?'—':(diff>0?'+':'')+eur(Math.abs(diff))+arrow}</td>
+         <td style="${TDN};font-weight:700;color:${dc}">${pct!==null?(diff>0?'+':'')+pct+'%':'—'}</td>`
+      : '';
+    return `<tr onclick="_bilOpenCatDrillP('${nome.replace(/'/g,"\\'")}',_bilCatDrillPeriods)"
+      style="cursor:pointer;transition:background .12s"
+      onmouseenter="this.style.background='rgba(255,255,255,0.05)'"
+      onmouseleave="this.style.background='transparent'">
+      <td style="${TD}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${colore};margin-right:6px"></span><span style="font-weight:600">${nome}</span></td>
+      ${cells}${deltaCells}
+    </tr>`;
+  }).join('');
+
+  const BT=';border-top:2px solid var(--b2)';
+  const totCells = periods.map((p,i) => {
+    const tot = catSorted.reduce((s,[,d]) => s+(d.totPerPeriodo[i]||0), 0);
+    return `<td style="${TDN};font-weight:800;color:var(--red)${BT}">${tot>0?eur(tot):'—'}</td>`;
+  }).join('');
+  const dcT = totDiff>0?'var(--red)':totDiff<0?'var(--green)':'var(--t3)';
+  const arrowT = totDiff>0?' ▲':totDiff<0?' ▼':'';
+  const totDeltaCells = periods.length > 1
+    ? `<td style="${TDN};font-weight:800;color:${dcT}${BT}">${totDiff===0?'—':(totDiff>0?'+':'')+eur(Math.abs(totDiff))+arrowT}</td>
+       <td style="${TDN};font-weight:800;color:${dcT}${BT}">${totPct!==null?(totDiff>0?'+':'')+totPct+'%':'—'}</td>`
+    : '';
+  const totRow = `<tr style="background:rgba(255,255,255,0.04)"><td style="${TD};font-weight:800;color:var(--t)${BT}">TOTALE</td>${totCells}${totDeltaCells}</tr>`;
+
+  document.getElementById('cat-riepilogo-title').textContent = `Riepilogo categorie — ${first.label} → ${last.label}`;
+  document.getElementById('cat-riepilogo-sub').textContent = `${periods.length} periodi · ${catSorted.length} categorie · clicca per dettaglio`;
+  document.getElementById('cat-riepilogo-body').innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      ${periods.map((p,i) => `<button onclick="_bilOpenCatRiepilogoP([_bilCatDrillPeriods[${i}]])" style="padding:3px 10px;border-radius:6px;border:2px solid ${_pColor(i)}99;background:${_pColor(i)}1a;color:${_pColor(i)};cursor:pointer;font-size:10px;font-weight:700">📄 Solo ${p.label}</button>`).join('')}
+      ${periods.length > 1 ? `<button onclick="_bilOpenCatRiepilogoP(_bilCatDrillPeriods)" style="padding:3px 10px;border-radius:6px;border:1px solid var(--b2);background:transparent;color:var(--t3);cursor:pointer;font-size:10px;font-weight:700">↺ Tutti</button>` : ''}
+    </div>
+    <div style="overflow-x:auto">
+      <table style="min-width:100%;border-collapse:collapse">
+        <thead><tr><th style="${TH};text-align:left;color:var(--t3)">Categoria</th>${thPeriods}${deltaHdr}</tr></thead>
+        <tbody>${rows}${totRow}</tbody>
+      </table>
+    </div>`;
+
+  const modal = document.getElementById('modal-cat-riepilogo');
+  const inner = document.getElementById('modal-cat-riepilogo-inner');
+  if (inner) inner.scrollTop = 0;
+  modal.classList.add('open');
+}
+
+// ── Drill di una singola categoria sui periodi selezionati ──────────────
+function _bilOpenCatDrillP(catNome, periods) {
+  const cat = DB.categorie.find(c => c.Nome === catNome);
+  const colore = cat ? cat.Colore : '#94a3b8';
+
+  const txByPeriod = periods.map(p => DB.dati.filter(r => {
+    if (!r.Data || !r.Data.startsWith(p.mKey)) return false;
+    const c = DB.categorie.find(c => c.ID === r.IDCategoria);
+    return (c ? c.Nome : '—') === catNome;
+  }).sort((a,b) => b.Data.localeCompare(a.Data)));
+
+  const totPerPeriodo = txByPeriod.map(txs => txs.reduce((s,r)=>s+r.Importo,0));
+  const totGlobale = totPerPeriodo.reduce((s,v)=>s+v,0);
+
+  const TD  = 'white-space:nowrap;font-size:11px;padding:5px 8px';
+  const TDN = TD + ';text-align:right';
+  const TH  = 'font-size:10px;padding:5px 8px;white-space:nowrap;color:var(--t3)';
+  const BT  = TD + ';border-top:1px solid var(--b2)';
+  const BTN = TDN + ';border-top:1px solid var(--b2)';
+
+  const rows = periods.map((p,i) => {
+    let delta = '<span style="color:var(--t3)">—</span>';
+    if (i > 0) {
+      const diff = totPerPeriodo[i] - totPerPeriodo[i-1];
+      delta = `<span style="color:${diff<=0?'var(--green)':'var(--red)'}">${diff>0?'+':''}${eur(Math.abs(diff))}</span>`;
+    }
+    return `<tr>
+      <td style="${TD};font-weight:700;color:${_pColor(i)}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${_pColor(i)};margin-right:5px"></span>${p.label}</td>
+      <td style="${TDN};color:var(--red);font-weight:700">${totPerPeriodo[i]>0?eur(totPerPeriodo[i]):'—'}</td>
+      <td style="${TDN}">${delta}</td>
+    </tr>`;
+  }).join('');
+
+  const totDiff = totPerPeriodo[totPerPeriodo.length-1] - totPerPeriodo[0];
+  const totPct = totPerPeriodo[0] > 0 ? (totDiff/totPerPeriodo[0]*100).toFixed(0) : null;
+  const totalRow = periods.length > 1 ? `<tr style="background:rgba(255,255,255,0.04)">
+    <td style="${BT};font-weight:800;color:var(--t)">TOTALE</td>
+    <td style="${BTN};color:var(--red);font-weight:800">${eur(totGlobale)}</td>
+    <td style="${BTN};font-weight:700;color:${totDiff<=0?'var(--green)':'var(--red)'}">Δ ${totDiff>0?'+':''}${eur(Math.abs(totDiff))}${totPct!==null?` (${totDiff>0?'+':''}${totPct}%)`:''}</td>
+  </tr>` : '';
+
+  const tabella = `<div style="overflow-x:auto">
+    <table style="min-width:100%;border-collapse:collapse">
+      <thead><tr><th style="${TH};text-align:left">Periodo</th><th style="${TH};text-align:right;color:var(--red)">Usc.</th><th style="${TH};text-align:right">Δ vs prec.</th></tr></thead>
+      <tbody>${rows}${totalRow}</tbody>
+    </table>
+  </div>`;
+
+  // ── Transazioni affiancate per periodo ──
+  const ML2 = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const txColStyle = `flex:1;min-width:0;padding:0 4px`;
+  const txHdrStyle = i => `font-size:11px;font-weight:800;color:${_pColor(i)};padding:6px 4px 4px;border-bottom:2px solid ${_pColor(i)};margin-bottom:4px`;
+  const txRowStyle = `display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:6px`;
+  const txDescStyle= `font-size:10px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1`;
+  const txImpStyle = `font-size:10px;color:var(--red);font-weight:600;white-space:nowrap`;
+  const txDateStyle= `font-size:9px;color:var(--t3);white-space:nowrap`;
+  const aggrega = localStorage.getItem('catDrillAggrega') === '1';
+
+  const buildTxRows = (txs, agg) => {
+    if (!agg) return txs.map(r =>
+      `<div style="${txRowStyle}">
+        <span style="${txDescStyle}" title="${r.Descrizione||''}">${r.Descrizione||'—'}</span>
+        <span style="${txDateStyle}">${r.Data.slice(8)}</span>
+        <span style="${txImpStyle}">-${eur(r.Importo)}</span>
+      </div>`).join('');
+    const map = {};
+    txs.forEach(r => {
+      const k = (r.Descrizione||'—').toLowerCase().trim();
+      if (!map[k]) map[k] = { desc: r.Descrizione||'—', tot: 0, n: 0 };
+      map[k].tot += r.Importo; map[k].n++;
+    });
+    return Object.values(map).sort((a,b)=>b.tot-a.tot).map(g =>
+      `<div style="${txRowStyle}">
+        <span style="${txDescStyle}">${g.desc}</span>
+        <span style="${txDateStyle}">×${g.n}</span>
+        <span style="${txImpStyle}">-${eur(g.tot)}</span>
+      </div>`).join('');
+  };
+
+  const txCols = periods.map((p,i) => {
+    const txs = txByPeriod[i];
+    const totP = totPerPeriodo[i];
+    const media = txs.length > 0 ? totP/txs.length : 0;
+    const totaleFooter = `<div style="border-top:2px solid var(--b2);margin-top:8px;padding-top:6px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--t);padding:2px 0">
+        <span>Totale (${txs.length} mov.)</span><span style="color:var(--red)">-${eur(totP)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);padding:2px 0">
+        <span>Media/mov.</span><span>-${eur(media)}</span>
+      </div>
+    </div>`;
+    return `<div style="${txColStyle}">
+      <div style="${txHdrStyle(i)}">${p.label} <span style="font-size:10px;font-weight:400;opacity:.7">${eur(totP)}</span></div>
+      ${buildTxRows(txs, aggrega) || '<div style="font-size:10px;color:var(--t3);padding:8px 0">Nessuna transazione</div>'}
+      ${totaleFooter}
+    </div>`;
+  }).join(`<div style="width:1px;background:var(--b2);margin:0 4px;align-self:stretch"></div>`);
+
+  const toggleAggrega = `<button onclick="localStorage.setItem('catDrillAggrega',localStorage.getItem('catDrillAggrega')==='1'?'0':'1');_bilOpenCatDrillP('${catNome.replace(/'/g,"\\'")}',_bilCatDrillPeriods)" style="padding:3px 10px;border-radius:6px;border:1px solid ${aggrega?'var(--accent)':'var(--b2)'};background:${aggrega?'rgba(79,142,247,0.15)':'transparent'};color:${aggrega?'var(--accent)':'var(--t3)'};cursor:pointer;font-size:10px;font-weight:700">⊞ Aggrega</button>`;
+
+  document.getElementById('cat-drill-title').innerHTML =
+    `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colore};margin-right:6px"></span>${catNome}`;
+  document.getElementById('cat-drill-sub').textContent =
+    `${periods.length} periodi · totale aggregato ${eur(totGlobale)}`;
+
+  const chartId = 'chart-cat-drill-trend';
+  document.getElementById('cat-drill-body').innerHTML = `
+    <div style="margin-bottom:16px">${tabella}</div>
+    <div class="sec-title" style="margin-bottom:8px">Trend periodi</div>
+    <div style="position:relative;height:200px;margin-bottom:16px"><canvas id="${chartId}"></canvas></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="sec-title" style="margin-bottom:0">Transazioni</div>
+      ${toggleAggrega}
+    </div>
+    <div style="display:flex;gap:0;overflow-x:auto">${txCols}</div>
+  `;
+
+  requestAnimationFrame(() => {
+    makeChart(chartId, {
+      type: 'bar',
+      data: {
+        labels: periods.map(p=>p.label),
+        datasets: [
+          { label: catNome, data: totPerPeriodo,
+            backgroundColor: periods.map((p,i) => _pColor(i)+'99'),
+            borderColor: periods.map((p,i) => _pColor(i)),
+            borderWidth: 1, borderRadius: 3 },
+          { label: 'Trend', data: totPerPeriodo, type: 'line',
+            borderColor: colore, backgroundColor: 'transparent',
+            borderWidth: 2, pointRadius: 3, pointBackgroundColor: colore,
+            tension: 0.3 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${eur(ctx.raw)}` } } },
+        scales: {
+          x: { ticks: { color: 'var(--t3)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: 'var(--t3)', font: { size: 10 }, callback: v => '€'+Math.round(v/1000)+'k' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+      }
+    });
+  });
+
+  const modal = document.getElementById('modal-cat-drill');
+  const inner = document.getElementById('modal-cat-drill-inner');
+  if (inner) inner.scrollTop = 0;
+  modal.classList.add('open');
+}
+
+// ── Riepilogo categorie entrate per periodi selezionati ──────────────────
+function _bilOpenEnCatRiepilogoP(periods) {
+  if (!periods.length) return;
+  const first = periods[0], last = periods[periods.length-1];
+
+  const catData = {};
+  periods.forEach((p, i) => {
+    DB.datiEntrate.forEach(r => {
+      if (!r.Data || !r.Data.startsWith(p.enMKey)) return;
+      const cat = DB.categorieEntrate.find(c => c.ID === r.IDCategoria);
+      const nome = cat ? cat.Nome : '—';
+      const colore = cat ? cat.Colore : '#1ecf96';
+      if (!catData[nome]) catData[nome] = { colore, totPerPeriodo: periods.map(()=>0) };
+      catData[nome].totPerPeriodo[i] += r.Importo;
+    });
+  });
+
+  const catSorted = Object.entries(catData).sort((a,b) =>
+    (b[1].totPerPeriodo[periods.length-1]||0) - (a[1].totPerPeriodo[periods.length-1]||0));
+
+  const totFirst = catSorted.reduce((s,[,d]) => s+(d.totPerPeriodo[0]||0), 0);
+  const totLast  = catSorted.reduce((s,[,d]) => s+(d.totPerPeriodo[periods.length-1]||0), 0);
+  const totDiff  = totLast - totFirst;
+  const totPct   = totFirst > 0 ? (totDiff/totFirst*100).toFixed(0) : null;
+
+  const TH='font-size:10px;padding:4px 8px;white-space:nowrap';
+  const TD='font-size:11px;padding:5px 8px;white-space:nowrap';
+  const TDN=TD+';text-align:right';
+  const thPeriods = periods.map((p,i) =>
+    `<th style="${TH};text-align:right;color:${_pColor(i)};border-bottom:2px solid ${_pColor(i)}">${p.label}</th>`).join('');
+  const deltaHdr = periods.length > 1
+    ? `<th style="${TH};text-align:right;color:var(--t3)">Δ ${first.label}→${last.label}</th><th style="${TH};text-align:right;color:var(--t3)">%</th>`
+    : '';
+
+  const rows = catSorted.map(([nome,{colore,totPerPeriodo}]) => {
+    const f = totPerPeriodo[0]||0, l = totPerPeriodo[periods.length-1]||0, diff = l-f;
+    const pct = f>0 ? (diff/f*100).toFixed(0) : null;
+    const dc = diff>0?'var(--green)':diff<0?'var(--red)':'var(--t3)';
+    const arrow = diff>0?' ▲':diff<0?' ▼':'';
+    const cells = totPerPeriodo.map(v => `<td style="${TDN};color:${v>0?'var(--green)':'var(--t3)'}">${v>0?eur(v):'—'}</td>`).join('');
+    const deltaCells = periods.length > 1
+      ? `<td style="${TDN};font-weight:700;color:${dc}">${diff===0?'—':(diff>0?'+':'')+eur(Math.abs(diff))+arrow}</td>
+         <td style="${TDN};font-weight:700;color:${dc}">${pct!==null?(diff>0?'+':'')+pct+'%':'—'}</td>`
+      : '';
+    return `<tr onclick="_bilOpenEnCatDrillP('${nome.replace(/'/g,"\\'")}',_bilCatDrillPeriods)"
+      style="cursor:pointer;transition:background .12s"
+      onmouseenter="this.style.background='rgba(255,255,255,0.05)'"
+      onmouseleave="this.style.background='transparent'">
+      <td style="${TD}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${colore};margin-right:6px"></span><span style="font-weight:600">${nome}</span></td>
+      ${cells}${deltaCells}
+    </tr>`;
+  }).join('');
+
+  const BT=';border-top:2px solid var(--b2)';
+  const totCells = periods.map((p,i) => {
+    const tot = catSorted.reduce((s,[,d]) => s+(d.totPerPeriodo[i]||0), 0);
+    return `<td style="${TDN};font-weight:800;color:var(--green)${BT}">${tot>0?eur(tot):'—'}</td>`;
+  }).join('');
+  const dcT = totDiff>0?'var(--green)':totDiff<0?'var(--red)':'var(--t3)';
+  const arrowT = totDiff>0?' ▲':totDiff<0?' ▼':'';
+  const totDeltaCells = periods.length > 1
+    ? `<td style="${TDN};font-weight:800;color:${dcT}${BT}">${totDiff===0?'—':(totDiff>0?'+':'')+eur(Math.abs(totDiff))+arrowT}</td>
+       <td style="${TDN};font-weight:800;color:${dcT}${BT}">${totPct!==null?(totDiff>0?'+':'')+totPct+'%':'—'}</td>`
+    : '';
+  const totRow = `<tr style="background:rgba(255,255,255,0.04)"><td style="${TD};font-weight:800;color:var(--t)${BT}">TOTALE</td>${totCells}${totDeltaCells}</tr>`;
+
+  document.getElementById('encat-riepilogo-title').textContent = `Riepilogo entrate — ${first.label} → ${last.label}`;
+  document.getElementById('encat-riepilogo-sub').textContent = `${periods.length} periodi · ${catSorted.length} categorie · clicca per dettaglio`;
+  document.getElementById('encat-riepilogo-body').innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      ${periods.map((p,i) => `<button onclick="_bilOpenEnCatRiepilogoP([_bilCatDrillPeriods[${i}]])" style="padding:3px 10px;border-radius:6px;border:2px solid ${_pColor(i)}99;background:${_pColor(i)}1a;color:${_pColor(i)};cursor:pointer;font-size:10px;font-weight:700">📄 Solo ${p.label}</button>`).join('')}
+      ${periods.length > 1 ? `<button onclick="_bilOpenEnCatRiepilogoP(_bilCatDrillPeriods)" style="padding:3px 10px;border-radius:6px;border:1px solid var(--b2);background:transparent;color:var(--t3);cursor:pointer;font-size:10px;font-weight:700">↺ Tutti</button>` : ''}
+    </div>
+    <div style="overflow-x:auto">
+      <table style="min-width:100%;border-collapse:collapse">
+        <thead><tr><th style="${TH};text-align:left;color:var(--t3)">Categoria</th>${thPeriods}${deltaHdr}</tr></thead>
+        <tbody>${rows}${totRow}</tbody>
+      </table>
+    </div>`;
+
+  const modal = document.getElementById('modal-encat-riepilogo');
+  const inner = document.getElementById('modal-encat-riepilogo-inner');
+  if (inner) inner.scrollTop = 0;
+  modal.classList.add('open');
+}
+
+// ── Drill di una singola categoria entrate sui periodi selezionati ──────
+function _bilOpenEnCatDrillP(catNome, periods) {
+  const cat = DB.categorieEntrate.find(c => c.Nome === catNome);
+  const colore = cat ? cat.Colore : '#1ecf96';
+
+  const txByPeriod = periods.map(p => DB.datiEntrate.filter(r => {
+    if (!r.Data || !r.Data.startsWith(p.enMKey)) return false;
+    const c = DB.categorieEntrate.find(c => c.ID === r.IDCategoria);
+    return (c ? c.Nome : '—') === catNome;
+  }).sort((a,b) => b.Data.localeCompare(a.Data)));
+
+  const totPerPeriodo = txByPeriod.map(txs => txs.reduce((s,r)=>s+r.Importo,0));
+  const totGlobale = totPerPeriodo.reduce((s,v)=>s+v,0);
+
+  const TD  = 'white-space:nowrap;font-size:11px;padding:5px 8px';
+  const TDN = TD + ';text-align:right';
+  const TH  = 'font-size:10px;padding:5px 8px;white-space:nowrap;color:var(--t3)';
+  const BT  = TD + ';border-top:1px solid var(--b2)';
+  const BTN = TDN + ';border-top:1px solid var(--b2)';
+
+  const rows = periods.map((p,i) => {
+    let delta = '<span style="color:var(--t3)">—</span>';
+    if (i > 0) {
+      const diff = totPerPeriodo[i] - totPerPeriodo[i-1];
+      delta = `<span style="color:${diff>=0?'var(--green)':'var(--red)'}">${diff>0?'+':''}${eur(Math.abs(diff))}</span>`;
+    }
+    return `<tr>
+      <td style="${TD};font-weight:700;color:${_pColor(i)}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${_pColor(i)};margin-right:5px"></span>${p.label}</td>
+      <td style="${TDN};color:var(--green);font-weight:700">${totPerPeriodo[i]>0?eur(totPerPeriodo[i]):'—'}</td>
+      <td style="${TDN}">${delta}</td>
+    </tr>`;
+  }).join('');
+
+  const totDiff = totPerPeriodo[totPerPeriodo.length-1] - totPerPeriodo[0];
+  const totPct = totPerPeriodo[0] > 0 ? (totDiff/totPerPeriodo[0]*100).toFixed(0) : null;
+  const totalRow = periods.length > 1 ? `<tr style="background:rgba(255,255,255,0.04)">
+    <td style="${BT};font-weight:800;color:var(--t)">TOTALE</td>
+    <td style="${BTN};color:var(--green);font-weight:800">${eur(totGlobale)}</td>
+    <td style="${BTN};font-weight:700;color:${totDiff>=0?'var(--green)':'var(--red)'}">Δ ${totDiff>0?'+':''}${eur(Math.abs(totDiff))}${totPct!==null?` (${totDiff>0?'+':''}${totPct}%)`:''}</td>
+  </tr>` : '';
+
+  const tabella = `<div style="overflow-x:auto">
+    <table style="min-width:100%;border-collapse:collapse">
+      <thead><tr><th style="${TH};text-align:left">Periodo</th><th style="${TH};text-align:right;color:var(--green)">Entr.</th><th style="${TH};text-align:right">Δ vs prec.</th></tr></thead>
+      <tbody>${rows}${totalRow}</tbody>
+    </table>
+  </div>`;
+
+  const txColStyle = `flex:1;min-width:0;padding:0 4px`;
+  const txHdrStyle = i => `font-size:11px;font-weight:800;color:${_pColor(i)};padding:6px 4px 4px;border-bottom:2px solid ${_pColor(i)};margin-bottom:4px`;
+  const txRowStyle = `display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:6px`;
+  const txDescStyle= `font-size:10px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1`;
+  const txImpStyle = `font-size:10px;color:var(--green);font-weight:600;white-space:nowrap`;
+  const txDateStyle= `font-size:9px;color:var(--t3);white-space:nowrap`;
+  const aggrega = localStorage.getItem('encatDrillAggrega') === '1';
+
+  const buildTxRows = (txs, agg) => {
+    if (!agg) return txs.map(r =>
+      `<div style="${txRowStyle}">
+        <span style="${txDescStyle}" title="${r.Descrizione||''}">${r.Descrizione||'—'}</span>
+        <span style="${txDateStyle}">${r.Data.slice(8)}</span>
+        <span style="${txImpStyle}">+${eur(r.Importo)}</span>
+      </div>`).join('');
+    const map = {};
+    txs.forEach(r => {
+      const k = (r.Descrizione||'—').toLowerCase().trim();
+      if (!map[k]) map[k] = { desc: r.Descrizione||'—', tot: 0, n: 0 };
+      map[k].tot += r.Importo; map[k].n++;
+    });
+    return Object.values(map).sort((a,b)=>b.tot-a.tot).map(g =>
+      `<div style="${txRowStyle}">
+        <span style="${txDescStyle}">${g.desc}</span>
+        <span style="${txDateStyle}">×${g.n}</span>
+        <span style="${txImpStyle}">+${eur(g.tot)}</span>
+      </div>`).join('');
+  };
+
+  const txCols = periods.map((p,i) => {
+    const txs = txByPeriod[i];
+    const totP = totPerPeriodo[i];
+    const media = txs.length > 0 ? totP/txs.length : 0;
+    const totaleFooter = `<div style="border-top:2px solid var(--b2);margin-top:8px;padding-top:6px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--t);padding:2px 0">
+        <span>Totale (${txs.length} mov.)</span><span style="color:var(--green)">+${eur(totP)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);padding:2px 0">
+        <span>Media/mov.</span><span>+${eur(media)}</span>
+      </div>
+    </div>`;
+    return `<div style="${txColStyle}">
+      <div style="${txHdrStyle(i)}">${p.label} <span style="font-size:10px;font-weight:400;opacity:.7">${eur(totP)}</span></div>
+      ${buildTxRows(txs, aggrega) || '<div style="font-size:10px;color:var(--t3);padding:8px 0">Nessuna transazione</div>'}
+      ${totaleFooter}
+    </div>`;
+  }).join(`<div style="width:1px;background:var(--b2);margin:0 4px;align-self:stretch"></div>`);
+
+  const toggleAggrega = `<button onclick="localStorage.setItem('encatDrillAggrega',localStorage.getItem('encatDrillAggrega')==='1'?'0':'1');_bilOpenEnCatDrillP('${catNome.replace(/'/g,"\\'")}',_bilCatDrillPeriods)" style="padding:3px 10px;border-radius:6px;border:1px solid ${aggrega?'var(--accent)':'var(--b2)'};background:${aggrega?'rgba(79,142,247,0.15)':'transparent'};color:${aggrega?'var(--accent)':'var(--t3)'};cursor:pointer;font-size:10px;font-weight:700">⊞ Aggrega</button>`;
+
+  document.getElementById('encat-drill-title').innerHTML =
+    `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colore};margin-right:6px"></span>${catNome}`;
+  document.getElementById('encat-drill-sub').textContent =
+    `${periods.length} periodi · totale aggregato ${eur(totGlobale)}`;
+
+  const chartId = 'chart-encat-drill-trend';
+  document.getElementById('encat-drill-body').innerHTML = `
+    <div style="margin-bottom:16px">${tabella}</div>
+    <div class="sec-title" style="margin-bottom:8px">Trend periodi</div>
+    <div style="position:relative;height:200px;margin-bottom:16px"><canvas id="${chartId}"></canvas></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="sec-title" style="margin-bottom:0">Transazioni</div>
+      ${toggleAggrega}
+    </div>
+    <div style="display:flex;gap:0;overflow-x:auto">${txCols}</div>
+  `;
+
+  requestAnimationFrame(() => {
+    makeChart(chartId, {
+      type: 'bar',
+      data: {
+        labels: periods.map(p=>p.label),
+        datasets: [
+          { label: catNome, data: totPerPeriodo,
+            backgroundColor: periods.map((p,i) => _pColor(i)+'99'),
+            borderColor: periods.map((p,i) => _pColor(i)),
+            borderWidth: 1, borderRadius: 3 },
+          { label: 'Trend', data: totPerPeriodo, type: 'line',
+            borderColor: colore, backgroundColor: 'transparent',
+            borderWidth: 2, pointRadius: 3, pointBackgroundColor: colore,
+            tension: 0.3 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${eur(ctx.raw)}` } } },
+        scales: {
+          x: { ticks: { color: 'var(--t3)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: 'var(--t3)', font: { size: 10 }, callback: v => '€'+Math.round(v/1000)+'k' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+      }
+    });
+  });
+
+  const modal = document.getElementById('modal-encat-drill');
+  const inner = document.getElementById('modal-encat-drill-inner');
+  if (inner) inner.scrollTop = 0;
+  modal.classList.add('open');
+}
+
 
 function closeDrill() {
   const modal = document.getElementById('modal-drill');
@@ -15064,6 +15554,10 @@ window.closeEnCatDrill = closeEnCatDrill;
 window._bilCmpSetAllMonths = _bilCmpSetAllMonths;
 window.closeCatRiepilogo = closeCatRiepilogo;
 window._bilOpenCatDrill = _bilOpenCatDrill;
+window._bilOpenCatRiepilogoP = _bilOpenCatRiepilogoP;
+window._bilOpenCatDrillP = _bilOpenCatDrillP;
+window._bilOpenEnCatRiepilogoP = _bilOpenEnCatRiepilogoP;
+window._bilOpenEnCatDrillP = _bilOpenEnCatDrillP;
 window.closeCatDrill = closeCatDrill;
 
 init().then(() => { initNavWidgets(); });
