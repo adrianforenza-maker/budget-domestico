@@ -4579,6 +4579,11 @@ function _bilSetTopMode(mode) {
   if (_bilTopMode === mode) return;
   _bilTopMode = mode;
   _bilChartSel.clear();
+  // Annulla eventuali timer di click pendenti (single/doppio click) per evitare
+  // che un handler della modalità precedente scatti su stato non più valido
+  if (_bilClickTimer) { clearTimeout(_bilClickTimer); _bilClickTimer = null; }
+  clearTimeout(_clickTimer['chart-bil-personal']);
+  delete _clickTimer['chart-bil-personal'];
   if (mode === 'agg') {
     const ctrlEl = document.getElementById('bil-top-cmp-controls');
     if (ctrlEl) ctrlEl.style.display = 'none';
@@ -4906,6 +4911,9 @@ function _bilCmpAttachClickHandler(canvasId, data) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   if (canvas._bilCmpClickHandler) canvas.removeEventListener('click', canvas._bilCmpClickHandler);
+  // Rimuovi anche l'eventuale handler della modalità Aggregato (solo per il grafico principale)
+  if (canvas._bilClickHandler) { canvas.removeEventListener('click', canvas._bilClickHandler); canvas._bilClickHandler = null; }
+  delete _clickTimer[canvasId];
   canvas._bilCmpClickHandler = function(e) {
     const ch = charts[canvasId];
     if (!ch) return;
@@ -5740,8 +5748,11 @@ function _renderBilChart(selYr, selMo) {
   // Gestione click sul canvas direttamente (evita crash handleEvent di Chart.js)
   const _bilCanvas = document.getElementById('chart-bil-personal');
   if (_bilCanvas) {
-    // Rimuovi vecchio listener se presente
+    // Rimuovi vecchi listener se presenti (sia agg che cmp, per evitare doppio handling
+    // quando si passa da una modalità all'altra)
     if (_bilCanvas._bilClickHandler) _bilCanvas.removeEventListener('click', _bilCanvas._bilClickHandler);
+    if (_bilCanvas._bilCmpClickHandler) { _bilCanvas.removeEventListener('click', _bilCanvas._bilCmpClickHandler); _bilCanvas._bilCmpClickHandler = null; }
+    delete _clickTimer['chart-bil-personal'];
     _bilCanvas._bilClickHandler = function(e) {
       const ch = charts['chart-bil-personal'];
       if (!ch) return;
