@@ -5922,6 +5922,58 @@ function _bilKey(w) {
   return _bilP === 'M' ? `${w.yr}-${String(w.mo).padStart(2,'0')}` : String(w.yr);
 }
 
+// Tabella di confronto periodo-per-periodo (mese per mese o anno per anno,
+// in base alla selezione multipla in modalità Aggregato)
+function _bilBuildPeriodCmpTable(periodTotals) {
+  const TD  = 'white-space:nowrap;font-size:11px;padding:5px 8px';
+  const TDN = TD + ';text-align:right';
+  const TH  = 'font-size:10px;padding:5px 8px;white-space:nowrap;color:var(--t3)';
+
+  const rows = periodTotals.map((p, i) => {
+    let delta = '<span style="color:var(--t3)">—</span>';
+    if (i > 0) {
+      const diff = p.bil - periodTotals[i-1].bil;
+      delta = `<span style="color:${diff>=0?'var(--green)':'var(--red)'}">${diff>=0?'+':''}${eur(Math.abs(diff))}</span>`;
+    }
+    const bilC = p.bil >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<tr>
+      <td style="${TD};font-weight:700;color:var(--t2)">${p.label}</td>
+      <td style="${TDN};color:var(--green)">${eur(p.totE)}</td>
+      <td style="${TDN};color:var(--red)">${eur(p.totU)}</td>
+      <td style="${TDN};color:${bilC};font-weight:700">${p.bil<0?'-':''}${eur(Math.abs(p.bil))}</td>
+      <td style="${TDN}">${delta}</td>
+    </tr>`;
+  }).join('');
+
+  const totE = periodTotals.reduce((s,p) => s+p.totE, 0);
+  const totU = periodTotals.reduce((s,p) => s+p.totU, 0);
+  const totBil = totE - totU;
+  const totDelta = periodTotals[periodTotals.length-1].bil - periodTotals[0].bil;
+  const BT  = TD + ';border-top:1px solid var(--b2)';
+  const BTN = TDN + ';border-top:1px solid var(--b2)';
+
+  const totalRow = `<tr style="background:rgba(255,255,255,0.04)">
+    <td style="${BT};font-weight:800;color:var(--t)">TOTALE</td>
+    <td style="${BTN};color:var(--green);font-weight:700">${eur(totE)}</td>
+    <td style="${BTN};color:var(--red);font-weight:700">${eur(totU)}</td>
+    <td style="${BTN};color:${totBil>=0?'var(--green)':'var(--red)'};font-weight:800">${totBil<0?'-':''}${eur(Math.abs(totBil))}</td>
+    <td style="${BTN};font-weight:700;color:${totDelta>=0?'var(--green)':'var(--red)'}">Δ ${totDelta>=0?'+':''}${eur(Math.abs(totDelta))}</td>
+  </tr>`;
+
+  return `<div style="overflow-x:auto">
+    <table style="min-width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="${TH};text-align:left">Periodo</th>
+        <th style="${TH};color:var(--green)">Entr.</th>
+        <th style="${TH};color:var(--red)">Usc.</th>
+        <th style="${TH}">Bil.</th>
+        <th style="${TH}">Δ vs prec.</th>
+      </tr></thead>
+      <tbody>${rows}${totalRow}</tbody>
+    </table>
+  </div>`;
+}
+
 function _openBilDrill(yr, mo) {
   // Costruisce lista periodi da mostrare: selezione multipla o singolo
   const ML = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
@@ -5938,6 +5990,7 @@ function _openBilDrill(yr, mo) {
   // Raccogli tutte le uscite e le entrate di riferimento dei periodi selezionati
   let allUscite = [], allEnPrec = [];
   const periodLabels = [];
+  const periodTotals = []; // { label, totE, totU, bil } per ogni periodo selezionato
 
   periodsToShow.forEach(({ yr: y, mo: m }) => {
     let mKey, enMKey, pLabel, eLabel;
@@ -5962,20 +6015,29 @@ function _openBilDrill(yr, mo) {
       }
     }
     periodLabels.push(pLabel);
-    DB.dati.filter(r => r.Data && r.Data.startsWith(mKey)).forEach(r => allUscite.push(r));
+
+    const periodU = DB.dati.filter(r => r.Data && r.Data.startsWith(mKey));
+    let periodE;
     if (_bilP === 'M') {
-      DB.datiEntrate.filter(r => r.Data && r.Data.startsWith(enMKey)).forEach(r => allEnPrec.push(r));
+      periodE = DB.datiEntrate.filter(r => r.Data && r.Data.startsWith(enMKey));
     } else {
       if (_bilModoEntrate === 'corrente') {
-        DB.datiEntrate.filter(r => r.Data && r.Data.startsWith(String(y))).forEach(r => allEnPrec.push(r));
+        periodE = DB.datiEntrate.filter(r => r.Data && r.Data.startsWith(String(y)));
       } else {
-        DB.datiEntrate.filter(r => r.Data && r.Data.startsWith(`${y-1}-12`)).forEach(r => allEnPrec.push(r));
+        periodE = DB.datiEntrate.filter(r => r.Data && r.Data.startsWith(`${y-1}-12`));
         for (let mo2 = 1; mo2 <= 11; mo2++) {
           const mk = `${y}-${String(mo2).padStart(2,'0')}`;
-          DB.datiEntrate.filter(r => r.Data && r.Data.startsWith(mk)).forEach(r => allEnPrec.push(r));
+          periodE = periodE.concat(DB.datiEntrate.filter(r => r.Data && r.Data.startsWith(mk)));
         }
       }
     }
+
+    periodU.forEach(r => allUscite.push(r));
+    periodE.forEach(r => allEnPrec.push(r));
+
+    const pTotU = periodU.reduce((s,r) => s+r.Importo, 0);
+    const pTotE = periodE.reduce((s,r) => s+r.Importo, 0);
+    periodTotals.push({ label: pLabel, totE: pTotE, totU: pTotU, bil: pTotE - pTotU });
   });
 
   // Deduplica entrate (stesso record può apparire in più periodi se Dic è condiviso)
@@ -5990,8 +6052,22 @@ function _openBilDrill(yr, mo) {
   const bil  = totE - totU;
 
   const titleStr = periodsToShow.length > 1
-    ? `${periodsToShow.length} periodi selezionati`
+    ? `Confronto — ${periodsToShow.length} periodi selezionati`
     : periodLabels[0];
+
+  // ── Determina se la selezione forma una "griglia pulita" anni×mesi
+  //    (un solo anno con N mesi, oppure più anni con tutti i 12 mesi in vista Anno)
+  //    necessaria per riusare i drill categoria con trend (_bilOpenCatDrill ecc.)
+  const selYears  = [...new Set(periodsToShow.map(p => p.yr))].sort((a,b) => a-b);
+  let selMonths, isCleanGrid;
+  if (_bilP === 'Y') {
+    selMonths   = [1,2,3,4,5,6,7,8,9,10,11,12];
+    isCleanGrid = true;
+  } else {
+    selMonths   = [...new Set(periodsToShow.map(p => p.mo))].sort((a,b) => a-b);
+    isCleanGrid = selYears.length === 1;
+  }
+  if (isCleanGrid) _bilCatDrillCtx = { years: selYears, months: selMonths };
 
   // Riepilogo per categoria uscite
   const byCat = {};
@@ -6004,10 +6080,25 @@ function _openBilDrill(yr, mo) {
   const catSorted = Object.entries(byCat).sort((a,b) => b[1].tot - a[1].tot);
   const maxCat = catSorted.length ? catSorted[0][1].tot : 1;
 
+  // Riepilogo per categoria entrate (solo se griglia pulita, per coerenza con drill cliccabile)
+  const byECat = {};
+  allEnPrec.forEach(r => {
+    const cat = DB.categorieEntrate.find(c => c.ID === r.IDCategoria);
+    const nome = cat ? cat.Nome : '—'; const colore = cat ? cat.Colore : '#1ecf96';
+    if (!byECat[nome]) byECat[nome] = { tot: 0, colore };
+    byECat[nome].tot += r.Importo;
+  });
+  const eCatSorted = Object.entries(byECat).sort((a,b) => b[1].tot - a[1].tot);
+  const maxECat = eCatSorted.length ? eCatSorted[0][1].tot : 1;
+
   // Usa modal-drill esistente
-  document.getElementById('drill-title').textContent = 'Bilancio — ' + titleStr;
+  document.getElementById('drill-title').textContent = (periodsToShow.length > 1 ? '' : 'Bilancio — ') + titleStr;
   document.getElementById('drill-sub').textContent = `${allUscite.length} uscite · ${allEnPrec.length} entrate rif.`;
   document.getElementById('drill-body').innerHTML = _bilDrillNavBar('both') + `
+    ${isCleanGrid && (catSorted.length || eCatSorted.length) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;justify-content:flex-end">
+      ${catSorted.length ? `<button onclick="_bilOpenCatRiepilogo()" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(245,161,36,0.6);background:rgba(245,161,36,0.12);color:#f5a124;cursor:pointer;font-size:11px;font-weight:700">📊 Riepilogo uscite</button>` : ''}
+      ${eCatSorted.length ? `<button onclick="_bilOpenEnCatRiepilogo()" style="padding:4px 12px;border-radius:6px;border:2px solid rgba(30,207,150,0.6);background:rgba(30,207,150,0.12);color:#1ecf96;cursor:pointer;font-size:11px;font-weight:700">📊 Riepilogo entrate</button>` : ''}
+    </div>` : ''}
     <div id="bil-sec-bil" class="kpi-grid" style="margin-bottom:16px">
       <div class="kpi"><div class="kpi-label">Bilancio</div>
         <div class="kpi-value" style="color:${bil>=0?'var(--green)':'var(--red)'}">${bil<0?'-':''}${eur(Math.abs(bil))}</div></div>
@@ -6018,12 +6109,21 @@ function _openBilDrill(yr, mo) {
       <div class="kpi"><div class="kpi-label">N° uscite</div>
         <div class="kpi-value kv-accent">${allUscite.length}</div></div>
     </div>
-    ${catSorted.length ? `<div id="bil-sec-spcat" class="sec-title" style="margin-bottom:8px">Uscite per categoria</div>
+    ${periodTotals.length > 1 ? `<div id="bil-sec-cmp" class="sec-title" style="margin-bottom:8px">Confronto periodo per periodo</div>
+    <div style="margin-bottom:20px">${_bilBuildPeriodCmpTable(periodTotals)}</div>` : ''}
+    ${catSorted.length ? `<div id="bil-sec-spcat" class="sec-title" style="margin-bottom:8px">Uscite per categoria${isCleanGrid ? ' <span style="font-size:10px;color:var(--t3);font-weight:400">(clicca per dettaglio)</span>' : ''}</div>
     <div class="prog-row" style="margin-bottom:16px">${catSorted.map(([nome,{tot,colore}]) =>
-      `<div class="prog-item"><div class="prog-top">
+      `<div class="prog-item"${isCleanGrid ? ` data-catname="${nome.replace(/"/g,'&quot;')}" style="cursor:pointer;border-radius:6px;padding:4px 6px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'"` : ''}><div class="prog-top">
         <span class="prog-name"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${colore};margin-right:5px"></span>${nome}</span>
-        <span class="prog-val">${eur(tot)} <span style="color:var(--t3);font-size:10px">(${totU>0?(tot/totU*100).toFixed(1):0}%)</span></span>
+        <span class="prog-val">${eur(tot)} <span style="color:var(--t3);font-size:10px">(${totU>0?(tot/totU*100).toFixed(1):0}%)</span>${isCleanGrid ? ' <span style="color:var(--accent);font-size:11px">›</span>' : ''}</span>
       </div><div class="prog-bar"><div class="prog-fill" style="width:${maxCat>0?(tot/maxCat*100):0}%;background:${colore}"></div></div></div>`
+    ).join('')}</div>` : ''}
+    ${eCatSorted.length ? `<div id="bil-sec-encat" class="sec-title" style="margin-bottom:8px">Entrate per categoria${isCleanGrid ? ' <span style="font-size:10px;color:var(--t3);font-weight:400">(clicca per dettaglio)</span>' : ''}</div>
+    <div class="prog-row" style="margin-bottom:16px">${eCatSorted.map(([nome,{tot,colore}]) =>
+      `<div class="prog-item"${isCleanGrid ? ` data-encatname="${nome.replace(/"/g,'&quot;')}" style="cursor:pointer;border-radius:6px;padding:4px 6px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'"` : ''}><div class="prog-top">
+        <span class="prog-name"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${colore};margin-right:5px"></span>${nome}</span>
+        <span class="prog-val">${eur(tot)} <span style="color:var(--t3);font-size:10px">(${totE>0?(tot/totE*100).toFixed(1):0}%)</span>${isCleanGrid ? ' <span style="color:var(--accent);font-size:11px">›</span>' : ''}</span>
+      </div><div class="prog-bar"><div class="prog-fill" style="width:${maxECat>0?(tot/maxECat*100):0}%;background:${colore}"></div></div></div>`
     ).join('')}</div>` : ''}
     <div id="bil-sec-sp" class="sec-title" style="margin-bottom:8px">Uscite (${allUscite.length})</div>
     <div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Categoria</th><th>Descrizione</th><th class="td-num">Importo</th><th>Note</th></tr></thead>
@@ -6050,6 +6150,20 @@ function _openBilDrill(yr, mo) {
   const _bmd3 = document.getElementById('modal-drill');
   const _bmdi3 = document.getElementById('modal-drill-inner'); if(_bmdi3) _bmdi3.scrollTop = 0;
   _bmd3.classList.add('open');
+  if (isCleanGrid) {
+    requestAnimationFrame(() => {
+      const drillBody = document.getElementById('drill-body');
+      if (drillBody && !drillBody._catClickBound) {
+        drillBody._catClickBound = true;
+        drillBody.addEventListener('click', function(e) {
+          const item = e.target.closest('[data-catname]');
+          if (item) _bilOpenCatDrill(item.dataset.catname, _bilCatDrillCtx.years, _bilCatDrillCtx.months);
+          const eItem = e.target.closest('[data-encatname]');
+          if (eItem) _bilOpenEnCatDrill(eItem.dataset.encatname, _bilCatDrillCtx.years, _bilCatDrillCtx.months);
+        });
+      }
+    });
+  }
 }
 
 function closeBilDrill() {
