@@ -1610,8 +1610,11 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
   <div class="kpi-grid" id="bil-kpi-row" style="margin-bottom:12px"></div>
 
   <div class="card mb16">
-    <div class="card-hdr" style="justify-content:space-between">
-      <span class="card-title">Andamento Bilancio Personale</span>
+    <div class="card-hdr" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="card-title">Andamento Bilancio Personale</span>
+        <div id="bil-mode-toggle" style="display:flex;gap:4px"></div>
+      </div>
       <span id="bil-chart-range" style="font-size:10px;color:var(--t3);font-family:var(--m)"></span>
     </div>
     <div id="bil-toggles" style="display:flex;gap:6px;padding:0 4px 8px;flex-wrap:wrap"></div>
@@ -4511,6 +4514,7 @@ let _bilChartOffset = 0;   // offset finestra istogramma
 const _bilWinSize = 12;    // barre per finestra
 let _bilChartSel = new Set();
 let _bilClickTimer = null;
+let _bilTopMode = 'agg';   // 'agg' = aggregato (default) | 'cmp' = confronto stesso mese su anni diversi
 // Toggle visibilità dataset grafico principale
 let _bilShowEn      = true;  // Entrate barre
 let _bilShowSp      = true;  // Uscite barre
@@ -4546,6 +4550,28 @@ function _bilRenderToggles() {
     mk('trendSp',  'Trend Uscite',   '#f0566a', _bilShowTrendSp,  true),
   ].join('');
 }
+
+// Toggle "Aggregato" (mesi/anni consecutivi) vs "Confronto" (stesso mese su anni diversi)
+function _bilRenderModeToggle() {
+  const el = document.getElementById('bil-mode-toggle');
+  if (!el) return;
+  if (_bilP !== 'M') { el.innerHTML = ''; return; } // confronto disponibile solo in vista Mese
+  const mk = (mode, label, title) => {
+    const active = _bilTopMode === mode;
+    return `<button onclick="_bilSetTopMode('${mode}')" title="${title}" style="padding:3px 10px;border-radius:6px;border:1px solid ${active?'var(--accent)':'var(--b2)'};background:${active?'rgba(79,142,247,0.18)':'transparent'};color:${active?'var(--accent)':'var(--t3)'};cursor:pointer;font-size:10px;font-weight:700;font-family:var(--m);transition:all .15s">${label}</button>`;
+  };
+  el.innerHTML =
+    mk('agg', '📊 Aggregato', 'Mostra mesi/anni consecutivi') +
+    mk('cmp', '📅 Confronto', 'Confronta lo stesso mese negli anni');
+}
+
+function _bilSetTopMode(mode) {
+  if (_bilTopMode === mode) return;
+  _bilTopMode = mode;
+  _bilChartSel.clear();
+  renderBilPersonale();
+}
+window._bilSetTopMode = _bilSetTopMode;
 
 function _bilToggle(key) {
   if (key==='en')       _bilShowEn       = !_bilShowEn;
@@ -5503,11 +5529,111 @@ function renderBilPersonale() {
     `;
   }
   _bilRenderToggles();
+  _bilRenderModeToggle();
   _renderBilChart(yr, mo);
   _renderBilConfronto();
 }
 
+// Vista "Confronto" per il grafico principale: stesso mese su anni diversi
+function _renderBilChartCmp(selMo) {
+  const ML = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+  const allDates = DB.dati.map(r => r.Data).concat(DB.datiEntrate.map(r => r.Data)).filter(Boolean);
+  if (!allDates.length) return;
+  const minYr = allDates.reduce((min, d) => Math.min(min, parseInt(d.slice(0,4))), 9999);
+  const maxYr = allDates.reduce((max, d) => Math.max(max, parseInt(d.slice(0,4))), 0);
+
+  const years = [];
+  for (let yr = minYr; yr <= maxYr; yr++) years.push(yr);
+
+  // Tieni solo gli anni che hanno dati per il mese selezionato
+  const validYears = years.filter(yr => !_bilDataFor(yr, selMo).isEmpty);
+  if (!validYears.length) {
+    document.getElementById('bil-chart-range').textContent = `Confronto: ${ML[selMo-1]} — nessun dato`;
+    return;
+  }
+
+  document.getElementById('bil-chart-range').textContent =
+    `Confronto: ${ML[selMo-1]} — ${validYears[0]}–${validYears[validYears.length-1]}`;
+
+  const dataArr  = validYears.map(yr => _bilDataFor(yr, selMo));
+  const labels   = validYears.map(String);
+  const enData   = dataArr.map(d => d.enRef);
+  const spData   = dataArr.map(d => d.uscite);
+  const bilData  = dataArr.map(d => d.bilancio);
+  const bilColors = bilData.map(v => v >= 0 ? 'rgba(30,207,150,0.85)' : 'rgba(240,86,106,0.85)');
+
+  const cfg = {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Entrate rif.', data: enData,
+          backgroundColor: 'rgba(30,207,150,0.65)', borderRadius: 3, hidden: !_bilShowEn },
+        { label: 'Uscite', data: spData,
+          backgroundColor: 'rgba(240,86,106,0.65)', borderRadius: 3, hidden: !_bilShowSp },
+        { label: 'Bilancio', data: bilData,
+          backgroundColor: bilColors, borderRadius: 3, hidden: !_bilShowBil },
+        { label: 'Trend Bilancio', data: bilData, type: 'line',
+          borderColor: 'rgba(79,142,247,0.9)', backgroundColor: 'transparent',
+          borderWidth: 2, pointRadius: 3, pointBackgroundColor: 'rgba(79,142,247,0.9)',
+          tension: 0.35, order: 0, hidden: !_bilShowTrendBil },
+        { label: 'Trend Entrate', data: enData, type: 'line',
+          borderColor: 'rgba(30,207,150,0.9)', backgroundColor: 'transparent',
+          borderWidth: 2, pointRadius: 3, pointBackgroundColor: 'rgba(30,207,150,0.9)',
+          tension: 0.35, order: 0, hidden: !_bilShowTrendEn },
+        { label: 'Trend Uscite', data: spData, type: 'line',
+          borderColor: 'rgba(240,86,106,0.9)', backgroundColor: 'transparent',
+          borderWidth: 2, pointRadius: 3, pointBackgroundColor: 'rgba(240,86,106,0.9)',
+          tension: 0.35, order: 0, hidden: !_bilShowTrendSp }
+      ]
+    },
+    options: {
+      ...chartDefaults(),
+      plugins: {
+        legend: { display: false },
+        tooltip: { ...chartDefaults().plugins.tooltip,
+          callbacks: {
+            title: items => `${ML[selMo-1]} ${validYears[items[0].dataIndex]}`,
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.raw<0?'-':''}${eur(Math.abs(ctx.raw))}`
+          }
+        }
+      }
+    }
+  };
+
+  makeChart('chart-bil-personal', cfg);
+
+  // Click su una barra → drill anno+mese (riusa il drill del confronto sotto)
+  const canvas = document.getElementById('chart-bil-personal');
+  if (canvas) {
+    if (canvas._bilClickHandler) canvas.removeEventListener('click', canvas._bilClickHandler);
+    canvas._bilClickHandler = function(e) {
+      const ch = charts['chart-bil-personal'];
+      if (!ch) return;
+      const points = ch.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
+      if (!points.length) return;
+      const yr = validYears[points[0].index];
+      _bilCmpOpenDrill(yr, selMo);
+    };
+    canvas.addEventListener('click', canvas._bilClickHandler);
+  }
+
+  // Nascondi elementi della vista aggregato non rilevanti qui
+  const hintEl = document.getElementById('bil-chart-hint');
+  if (hintEl) hintEl.textContent = `Click su una barra per il dettaglio di ${ML[selMo-1]} di quell'anno`;
+  const chipsEl = document.getElementById('bil-future-chips');
+  if (chipsEl) chipsEl.style.display = 'none';
+  const selWrap = document.getElementById('bil-sel-drill-wrap');
+  if (selWrap) selWrap.style.display = 'none';
+}
+
 function _renderBilChart(selYr, selMo) {
+  if (_bilTopMode === 'cmp' && _bilP === 'M') {
+    const mo = selMo || _bilCurrentPeriod().mo;
+    _renderBilChartCmp(mo);
+    return;
+  }
   const all = _bilAllPeriods();
   if (!all.length) return;
   const winEnd = all.length + _bilChartOffset - 1;
