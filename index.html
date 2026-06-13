@@ -4577,6 +4577,21 @@ function _bilRenderModeToggle() {
 
 function _bilSetTopMode(mode) {
   if (_bilTopMode === mode) return;
+
+  // Passando da Aggregato a Confronto: se erano selezionati dei periodi (Ctrl+click
+  // sulle barre), usa quei mesi come selezione per il confronto stesso-mese/anni-diversi
+  if (mode === 'cmp' && _bilP === 'M' && _bilChartSel.size > 0) {
+    const months = new Set();
+    _bilChartSel.forEach(key => {
+      const mo = parseInt(key.split('-')[1]);
+      if (mo >= 1 && mo <= 12) months.add(mo);
+    });
+    if (months.size > 0) {
+      _bilCmpMoSet = months;
+      _bilCmpOffset = 0;
+    }
+  }
+
   _bilTopMode = mode;
   _bilChartSel.clear();
   // Annulla eventuali timer di click pendenti (single/doppio click) per evitare
