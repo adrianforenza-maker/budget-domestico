@@ -34,8 +34,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Budget Domestico v2.1</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase-layer.js"></script>
 <script>
 
 
@@ -290,7 +288,7 @@ th.sortable:not(.asc):not(.desc) .sort-arrow::after{content:'⇅'}
 .pref-btn-sm.del:hover{color:var(--red);border-color:var(--red)}
 .pref-empty{color:var(--t3);font-size:13px;padding:20px;text-align:center;border:1px dashed var(--b2);border-radius:10px;margin-top:14px}
 /* ── MODAL CONFIRM CUSTOM ── */
-.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:600;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .confirm-overlay.open{display:flex}
 .confirm-box{background:var(--bg2);border:1px solid var(--b3);border-radius:16px;padding:28px 28px 22px;width:360px;max-width:90vw;animation:slideUp .18s ease;box-shadow:0 24px 64px rgba(0,0,0,.6)}
 .confirm-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 16px;flex-shrink:0}
@@ -414,16 +412,15 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <button class="titlebar-btn" id="btn-disc" data-action="act2" style="display:none">🔌 Disconnetti</button>
     <button class="titlebar-btn" data-action="act3" title="Esporta CSV Spese">↓ CSV Spese</button>
     <button class="titlebar-btn" data-action="act4" title="Esporta CSV Entrate">↓ CSV Entrate</button>
+    <button class="titlebar-btn" style="color:var(--accent);border-color:var(--accent)" onclick="importFromIphone()" title="Importa CSV dall'app iPhone">📱 iPhone Import</button>
+    <button class="titlebar-btn" style="color:var(--amber);border-color:var(--amber)" onclick="exportCategorieIphone()" title="Esporta categorie per iPhone">📤 Cat. iPhone</button>
+    <button class="titlebar-btn" style="color:var(--green);border-color:var(--green)" onclick="exportSnapshotIphone()" title="Esporta snapshot per iPhone (download locale)">📊 Snapshot</button>
+    <input type="file" id="iphone-csv-input" accept=".csv" style="display:none" onchange="processIphoneCSV(event)">
     <button class="titlebar-btn" data-action="act56" style="background:rgba(100,180,255,0.15);border-color:rgba(100,180,255,0.4);color:#64b4ff" title="Esporta JSON">⬆ JSON</button>
     <button class="titlebar-btn" data-action="act57" style="background:rgba(30,207,150,0.15);border-color:rgba(30,207,150,0.4);color:#1ecf96" title="Importa JSON">⬇ JSON</button>
-    <button class="titlebar-btn" id="btn-sb-user" onclick="sbLogout()" title="Account Supabase" style="display:none;background:rgba(30,207,150,.12);border-color:rgba(30,207,150,.4);color:#1ecf96">● Connesso</button>
-    <button class="titlebar-btn" id="btn-backup" onclick="sbBackupDB()" style="background:rgba(124,92,246,.12);border-color:rgba(124,92,246,.4);color:#7c5cf6" title="Scarica backup completo Supabase">⬇ Backup</button>
-    <button class="titlebar-btn" id="btn-restore" onclick="document.getElementById('restore-file-input').click()" style="background:rgba(245,161,36,.12);border-color:rgba(245,161,36,.4);color:#f5a124" title="Ripristina da file di backup">⬆ Restore</button>
-    <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="sbRestoreDB(event)">
-    <button class="titlebar-btn" onclick="exportSettings()" style="background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.4);color:#14b8a6" title="Scarica backup impostazioni localStorage">⬇ Settings</button>
-    <button class="titlebar-btn" onclick="document.getElementById('settings-import-input').click()" style="background:rgba(251,146,60,.12);border-color:rgba(251,146,60,.4);color:#fb923c" title="Ripristina impostazioni localStorage">⬆ Settings</button>
-    
-    <input type="file" id="settings-import-input" accept=".json" style="display:none" onchange="importSettings(event)">
+    <button class="titlebar-btn" id="btn-drive-connect" onclick="desktopDriveConnect()" style="background:rgba(66,133,244,.12);border-color:rgba(66,133,244,.4);color:#4285f4" title="Connetti Google Drive">☁ Drive</button>
+    <button class="titlebar-btn" id="btn-drive-upload" onclick="desktopDriveUploadSnapshot()" style="display:none;background:rgba(30,207,150,.12);border-color:rgba(30,207,150,.4);color:#1ecf96" title="Carica snapshot su Drive">⬆ Snap→Drive</button>
+    <button class="titlebar-btn" id="btn-drive-csv" onclick="desktopDriveDownloadCSV()" style="display:none;background:rgba(245,161,36,.12);border-color:rgba(245,161,36,.4);color:#f5a124" title="Scarica CSV iPhone da Drive">⬇ CSV←Drive</button>
     <input type="file" id="imp-json-input" accept=".json" style="display:none">
   </div>
   <div class="titlebar-path" id="db-path-label">● Dati locali</div>
@@ -839,6 +836,7 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <div class="multi-del-bar" id="sp-multi-bar">
       <span id="sp-multi-count">0 selezionati</span>
       <button class="btn-secondary" style="font-size:11px;padding:3px 10px;color:var(--red);border-color:var(--red)" onclick="deleteMultiple('spesa')">🗑 Elimina selezionati</button>
+      <button class="btn-secondary" style="font-size:11px;padding:3px 10px;color:var(--cyan);border-color:var(--cyan)" onclick="openBulkEdit('sp')">✏️ Modifica massiva</button>
       <button class="btn-secondary" style="font-size:11px;padding:3px 10px" onclick="clearMultiSelect('sp')">Annulla selezione</button>
     </div>
     <div class="tbl-wrap"><table>
@@ -916,6 +914,7 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     <div class="multi-del-bar" id="en-multi-bar">
       <span id="en-multi-count">0 selezionati</span>
       <button class="btn-secondary" style="font-size:11px;padding:3px 10px;color:var(--red);border-color:var(--red)" onclick="deleteMultiple('entrata')">🗑 Elimina selezionati</button>
+      <button class="btn-secondary" style="font-size:11px;padding:3px 10px;color:var(--cyan);border-color:var(--cyan)" onclick="openBulkEdit('en')">✏️ Modifica massiva</button>
       <button class="btn-secondary" style="font-size:11px;padding:3px 10px" onclick="clearMultiSelect('en')">Annulla selezione</button>
     </div>
     <div class="tbl-wrap"><table>
@@ -1100,7 +1099,12 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
   <div class="card mb16">
     <div class="card-hdr">
       <span class="card-title">⚙️ Impostazioni Calcolo</span>
-      <span id="analisi-base-info" style="font-size:11px;color:var(--t3);font-family:var(--m)">Anni base: sincronizzati con Previsioni</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span id="analisi-base-info" style="font-size:11px;color:var(--t3);font-family:var(--m)">Anni base: sincronizzati con Previsioni</span>
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px;color:var(--t3);border-color:var(--b2)" onclick="exportSettingsElectron()" title="Esporta impostazioni (compatibile con versione web)">⬇ Settings</button>
+        <button class="btn-secondary" style="font-size:10px;padding:2px 8px;color:var(--amber);border-color:var(--amber)" onclick="document.getElementById('settings-import-el').click()" title="Importa impostazioni da file JSON">⬆ Settings</button>
+        <input type="file" id="settings-import-el" accept=".json" style="display:none" onchange="importSettingsElectron(this)">
+      </span>
     </div>
   </div>
 
@@ -1218,10 +1222,10 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
 
 
 <!-- ═══════ PAGE: SCENARI ═══════ -->
-<div class="page" id="page-scenari" style="flex-direction:column;gap:8px;height:calc(100vh - 120px);overflow-y:auto">
+<div class="page" id="page-scenari" style="flex-direction:column;gap:12px;height:calc(100vh - 120px);overflow:hidden">
 
   <!-- Controlli — riga in cima -->
-  <div class="card" style="padding:8px 16px;flex-shrink:0">
+  <div class="card" style="padding:12px 16px;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
       <span style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">USCITE α</span>
       <div style="display:flex;gap:6px">
@@ -1255,12 +1259,12 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
   </div>
 
   <!-- KPI 4 colonne: Flat, EMA, Previsioni, Delta -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;flex-shrink:0">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;flex-shrink:0">
 
     <!-- FLAT -->
-    <div class="card" style="padding:8px 14px">
-      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">📊 Flat (Media Storica)</div>
-      <div style="display:flex;flex-direction:column;gap:3px">
+    <div class="card" style="padding:14px 16px">
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">📊 Flat (Media Storica)</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:11px;color:var(--t3)">Uscite/anno</span>
           <span id="sc-flat-sp" style="font-size:14px;font-weight:700;color:var(--red)">—</span>
@@ -1282,9 +1286,9 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     </div>
 
     <!-- EMA -->
-    <div class="card" style="padding:8px 14px;border-color:var(--green)">
-      <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">📈 EMA (Ponderata)</div>
-      <div style="display:flex;flex-direction:column;gap:3px">
+    <div class="card" style="padding:14px 16px;border-color:var(--green)">
+      <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">📈 EMA (Ponderata)</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:11px;color:var(--t3)">Uscite/anno</span>
           <span id="sc-ema-sp" style="font-size:14px;font-weight:700;color:var(--red)">—</span>
@@ -1306,9 +1310,9 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     </div>
 
     <!-- PREVISIONI con tassi -->
-    <div class="card" style="padding:8px 14px;border-color:var(--purple)">
-      <div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">🔮 Previsioni (con tassi)</div>
-      <div style="display:flex;flex-direction:column;gap:3px">
+    <div class="card" style="padding:14px 16px;border-color:var(--purple)">
+      <div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">🔮 Previsioni (con tassi)</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:11px;color:var(--t3)">Uscite anno 1</span>
           <span id="sc-prev-sp" style="font-size:14px;font-weight:700;color:var(--red)">—</span>
@@ -1330,9 +1334,9 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
     </div>
 
     <!-- DIFFERENZA -->
-    <div class="card" style="padding:8px 14px">
-      <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">⚡ Differenza EMA vs Flat</div>
-      <div style="display:flex;flex-direction:column;gap:3px">
+    <div class="card" style="padding:14px 16px">
+      <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">⚡ Differenza EMA vs Flat</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:11px;color:var(--t3)">Δ Uscite</span>
           <span id="sc-delta-sp" style="font-size:14px;font-weight:700">—</span>
@@ -1360,7 +1364,7 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
       <span id="sc-chart-title" style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Risparmio Cumulato — Flat vs EMA vs Previsioni</span>
       <span id="sc-hasTassi-badge" style="font-size:10px;padding:2px 8px;border-radius:6px;display:none"></span>
     </div>
-    <div style="flex:1;min-height:180px;position:relative"><canvas id="chart-scenari"></canvas></div>
+    <div style="flex:1;min-height:0"><canvas id="chart-scenari"></canvas></div>
   </div>
 
 </div>
@@ -1985,6 +1989,29 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
   </div>
 </div>
 
+<!-- ═══════ MODALE MODIFICA MASSIVA ═══════ -->
+<div class="modal-overlay" id="modal-bulk-edit" style="z-index:1400" onclick="if(event.target===this)closeBulkEdit()">
+  <div class="modal center" style="max-width:480px;width:95%">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">✏️ Modifica massiva</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px" id="bulk-edit-subtitle">N record selezionati</div>
+      </div>
+      <button class="modal-close" onclick="closeBulkEdit()">✕</button>
+    </div>
+    <div style="padding:16px 20px 8px">
+      <p style="font-size:11px;color:var(--t3);margin:0 0 14px">Compila solo i campi che vuoi modificare. I campi lasciati vuoti non verranno alterati.</p>
+      <div class="form-grid" id="bulk-edit-fields">
+        <!-- popolato dinamicamente -->
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 20px 18px;border-top:1px solid var(--b)">
+      <button class="btn-secondary" onclick="closeBulkEdit()">Annulla</button>
+      <button class="btn-primary" id="bulk-edit-confirm-btn" onclick="applyBulkEdit()">✏️ Applica a tutti</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -2078,302 +2105,45 @@ const sortState = {
 //  INIT
 // ═══════════════════════════════════════════════════
 async function init() {
-  await sbInit(async () => {
-    const res = await window.budgetAPI.loadData();
-    if (res.success) {
-      DB = res.data;
-      updateStatus('supabase', null);
-      populateCatFilters();
-      renderAll();
-      // Esegui il check DOPO che DB è popolato, non con timeout fisso
-      setTimeout(_checkAutoInsertPreferiti, 300);
-    } else {
-      showToast('Errore caricamento dati: ' + (res.error || 'sconosciuto'), 'error');
-    }
-    // Mostra email utente connesso
-    const user = await sbCurrentUser();
-    const btnUser = document.getElementById('btn-sb-user');
-    if (btnUser && user) {
-      btnUser.textContent = '● ' + user.email;
-      btnUser.style.display = '';
-    }
+  const res = await window.budgetAPI.loadData();
+  if (res.success) {
+    DB = res.data;
+    updateStatus(res.source, res.mdbPath || null);
+    populateCatFilters();
+    renderAll();
+    if (res.warning) showToast(res.warning.slice(0,80), 'error');
+  }
+
+  window.budgetAPI.onMenuEvent((ev) => {
+    if (ev === 'menu-open-mdb') openMdb();
+    if (ev === 'menu-disconnect-mdb') disconnectMdb();
+    if (ev === 'menu-export-csv-spese') exportCSV('spese');
+    if (ev === 'menu-export-csv-entrate') exportCSV('entrate');
   });
 }
 
-async function sbLogout() {
-  if (!confirm('Disconnettersi da Budget Domestico?')) return;
-  await sbSignOut();
-  const btnUser = document.getElementById('btn-sb-user');
-  if (btnUser) btnUser.style.display = 'none';
-  DB = { dati: [], datiEntrate: [], categorie: [], categorieEntrate: [] };
-  init();
-}
-
-// ── Backup completo Supabase → file JSON ────────────────────────
-async function sbBackupDB() {
-  const btn = document.getElementById('btn-backup');
-  const origText = btn ? btn.textContent : '';
-  try {
-    if (btn) { btn.textContent = '⏳ Export...'; btn.disabled = true; }
-
-    const user = await sbCurrentUser();
-    if (!user) { showToast('❌ Non autenticato', 'error'); return; }
-
-    // Scarica tutte e 4 le tabelle in parallelo
-    const [rSpese, rEntrate, rCats, rCatsEn] = await Promise.all([
-      _fetchAll('spese',            'data',  false),
-      _fetchAll('entrate',          'data',  false),
-      _sb.from('categorie').select('*').order('nome'),
-      _sb.from('categorie_entrate').select('*').order('nome')
-    ]);
-    if (rCats.error)   throw rCats.error;
-    if (rCatsEn.error) throw rCatsEn.error;
-
-    const backup = {
-      type:        'budget-backup',
-      version:     1,
-      exportedAt:  new Date().toISOString(),
-      userEmail:   user.email,
-      stats: {
-        spese:             rSpese.length,
-        entrate:           rEntrate.length,
-        categorie:         (rCats.data||[]).length,
-        categorie_entrate: (rCatsEn.data||[]).length
-      },
-      data: {
-        spese:             rSpese,
-        entrate:           rEntrate,
-        categorie:         rCats.data  || [],
-        categorie_entrate: rCatsEn.data || []
-      }
-    };
-
-    const ts   = new Date().toISOString().slice(0,10);
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const a    = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
-    a.download = `budget-backup-${ts}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-
-    const tot = backup.stats.spese + backup.stats.entrate;
-    showToast(`✓ Backup scaricato — ${tot} record (${backup.stats.spese} spese, ${backup.stats.entrate} entrate)`, 'success');
-  } catch(e) {
-    showToast('❌ Errore backup: ' + e.message, 'error');
-  } finally {
-    if (btn) { btn.textContent = origText; btn.disabled = false; }
-  }
-}
-
-// ── Restore da file JSON → Supabase ─────────────────────────────
-async function sbRestoreDB(event) {
-  const file = event.target.files[0];
-  event.target.value = '';
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = async (ev) => {
-    try {
-      const backup = JSON.parse(ev.target.result);
-      if (backup.type !== 'budget-backup' || !backup.data) {
-        showToast('⚠ File non valido — non è un backup Budget Domestico', 'error');
-        return;
-      }
-
-      const { spese, entrate, categorie, categorie_entrate } = backup.data;
-      const tot = (spese||[]).length + (entrate||[]).length;
-      const expDate = new Date(backup.exportedAt).toLocaleDateString('it-IT');
-      if (!confirm(
-        `Ripristino backup del ${expDate}\n\n` +
-        `• ${(spese||[]).length} spese\n` +
-        `• ${(entrate||[]).length} entrate\n` +
-        `• ${(categorie||[]).length} categorie spese\n` +
-        `• ${(categorie_entrate||[]).length} categorie entrate\n\n` +
-        `ATTENZIONE: questa operazione svuota il database attuale e lo ricostruisce dal backup.\n\nProcedere?`
-      )) return;
-
-      const btn = document.getElementById('btn-restore');
-      const origText = btn ? btn.textContent : '';
-      try {
-        if (btn) { btn.textContent = '⏳ Restore...'; btn.disabled = true; }
-
-        const user = await sbCurrentUser();
-        if (!user) { showToast('❌ Non autenticato', 'error'); return; }
-
-        // Svuota tutto
-        await Promise.all([
-          _sb.from('spese').delete().neq('id', 0),
-          _sb.from('entrate').delete().neq('id', 0),
-          _sb.from('categorie').delete().neq('id', 0),
-          _sb.from('categorie_entrate').delete().neq('id', 0)
-        ]);
-
-        // Reinserisce in batch da 200 record
-        const batchInsert = async (table, rows) => {
-          if (!rows || !rows.length) return;
-          const clean = rows.map(r => { const o = {...r}; delete o.id; return o; });
-          for (let i = 0; i < clean.length; i += 200) {
-            const { error } = await _sb.from(table).insert(clean.slice(i, i + 200));
-            if (error) throw error;
-          }
-        };
-
-        await batchInsert('categorie',         categorie);
-        await batchInsert('categorie_entrate', categorie_entrate);
-        await batchInsert('spese',             spese);
-        await batchInsert('entrate',           entrate);
-
-        showToast(`✓ Restore completato — ${tot} record ripristinati`, 'success');
-
-        // Ricarica i dati nell'app
-        const res = await window.budgetAPI.loadData();
-        if (res && res.success) {
-          DB = res.data;
-          updateStatus('supabase', null);
-          showPage('bilancio');
-        }
-      } finally {
-        if (btn) { btn.textContent = origText; btn.disabled = false; }
-      }
-    } catch(e) {
-      showToast('❌ Errore restore: ' + e.message, 'error');
-    }
-  };
-  reader.readAsText(file);
-}
-
-// ── Backup/Restore impostazioni localStorage ─────────────────────
-const _SETTINGS_EXCLUDE = [
-  'desktop_drive_token',
-  'budget_drive_imported_csv_ids',
-  'budget_deleted_ids_blacklist',
-  'budget_deleted_ids_log'
-];
-
-function exportSettings() {
-  const data = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (!_SETTINGS_EXCLUDE.includes(k)) data[k] = localStorage.getItem(k);
-  }
-  if (!Object.keys(data).length) { showToast('⚠ Nessuna impostazione da salvare', 'error'); return; }
-  const blob = new Blob([JSON.stringify({type:'budget-settings',v:1,savedAt:new Date().toISOString(),data}, null, 2)],
-                        {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `budget-settings-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  showToast(`✓ Settings salvati (${Object.keys(data).length} chiavi)`, 'success');
-}
-
-function importSettings(e) {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const parsed = JSON.parse(ev.target.result);
-      const data = parsed.type === 'budget-settings' ? parsed.data : parsed;
-      if (!data || typeof data !== 'object') { showToast('⚠ File non valido', 'error'); return; }
-      const keys = Object.keys(data).filter(k => !_SETTINGS_EXCLUDE.includes(k));
-      if (!confirm(`Ripristinare ${keys.length} impostazioni dal file?\n\nLe impostazioni attuali verranno sovrascritte.`)) return;
-      keys.forEach(k => localStorage.setItem(k, data[k]));
-      showToast(`✓ ${keys.length} impostazioni ripristinate — ricarica la pagina`, 'success');
-    } catch { showToast('⚠ Errore lettura file', 'error'); }
-  };
-  reader.readAsText(file);
-}
-
-// ── Export 4 CSV nel formato Access (ZIP) ───────────────────────
-async function exportMDB() {
-  const btn = document.querySelector('[onclick="exportMDB()"]');
-  const origText = btn ? btn.textContent : '';
-  try {
-    if (btn) { btn.textContent = '⏳ Export...'; btn.disabled = true; }
-
-    const user = await sbCurrentUser();
-    if (!user) { showToast('❌ Non autenticato', 'error'); return; }
-
-    // Scarica tutte le tabelle
-    const [rSpese, rEntrate, rCats, rCatsEn] = await Promise.all([
-      _fetchAll('spese',   'data', false),
-      _fetchAll('entrate', 'data', false),
-      _sb.from('categorie').select('*').order('nome'),
-      _sb.from('categorie_entrate').select('*').order('nome')
-    ]);
-    if (rCats.error)   throw rCats.error;
-    if (rCatsEn.error) throw rCatsEn.error;
-
-    // Formatta data: 03/11/26 00:00:00 → MM/DD/YY 00:00:00
-    const fmtData = d => {
-      if (!d) return '';
-      const [y, m, g] = d.split('-');
-      return `${m}/${g}/${y} 00:00:00`;
-    };
-
-    // Dati.txt — Data,Voci di spesa,Importo,Categoria,ID
-    const datoRows = (rSpese || []).map(r =>
-      `"${fmtData(r.data)}";"${(r.descrizione||'').replace(/"/g,'""')}";${parseFloat(r.importo||0).toFixed(4).replace('.',',')};"${(r.categoria||'').replace(/"/g,'""')}"`
-    );
-    const datiCSV = 'Data;Voci di spesa;Importo;Categoria\n' + datoRows.join('\n');
-
-    // Dati Entrate.txt — Data;Voce di incasso;Importo;Categoria entrata
-    const entrateRows = (rEntrate || []).map(r =>
-      `"${fmtData(r.data)}";"${(r.descrizione||'').replace(/"/g,'""')}";${parseFloat(r.importo||0).toFixed(4).replace('.',',')};"${(r.categoria||'').replace(/"/g,'""')}"`
-    );
-    const entrateCSV = 'Data;Voce di incasso;Importo;Categoria entrata\n' + entrateRows.join('\n');
-
-    // Categorie.txt — Categorie
-    const catRows = (rCats.data || []).map(r => `"${(r.nome||'').replace(/"/g,'""')}"`);
-    const catCSV  = 'Categorie\n' + catRows.join('\n');
-
-    // Categorie Entrate.txt — Categorie Entrate
-    const catEnRows = (rCatsEn.data || []).map(r => `"${(r.nome||'').replace(/"/g,'""')}"`);
-    const catEnCSV  = 'Categorie Entrate\n' + catEnRows.join('\n');
-
-    // Crea ZIP
-    const zip  = new JSZip();
-    const bom  = '\uFEFF';
-    zip.file('Dati.txt',             bom + datiCSV);
-    zip.file('Dati Entrate.txt',     bom + entrateCSV);
-    zip.file('Categorie.txt',        bom + catCSV);
-    zip.file('Categorie Entrate.txt',bom + catEnCSV);
-
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-    const a    = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
-    a.download = `budget-mdb-export-${new Date().toISOString().slice(0,10)}.zip`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-
-    const tot = (rSpese||[]).length + (rEntrate||[]).length;
-    showToast(`✓ ZIP scaricato — ${tot} record (${(rSpese||[]).length} spese, ${(rEntrate||[]).length} entrate)`, 'success');
-  } catch(e) {
-    showToast('❌ Errore export: ' + e.message, 'error');
-  } finally {
-    if (btn) { btn.textContent = origText; btn.disabled = false; }
-  }
-}
-
 function updateStatus(source, mdbPath) {
+  const isMdb = source === 'mdb' && mdbPath;
   const srcEl = document.getElementById('status-src');
-  if (srcEl) srcEl.textContent = 'Supabase Cloud';
+  if (!srcEl) return;
+  srcEl.textContent = isMdb ? `MDB: ${mdbPath.split(/[\\\/]/).pop()}` : (source==='local-fallback'?'Locale (MDB offline)':'Locale');
   const sp = DB.dati.length, en = DB.datiEntrate.length;
-  const recEl = document.getElementById('status-records');
-  if (recEl) recEl.textContent = `${sp} spese · ${en} entrate`;
-  const lastEl = document.getElementById('status-last-save');
-  if (lastEl) lastEl.textContent = `Aggiornato: ${new Date().toLocaleTimeString('it')}`;
+  document.getElementById('status-records').textContent = `${sp} spese · ${en} entrate`;
+  document.getElementById('status-last-save').textContent = `Aggiornato: ${new Date().toLocaleTimeString('it')}`;
   const pathLabel = document.getElementById('db-path-label');
-  if (pathLabel) pathLabel.innerHTML = `<span style="color:var(--green)">●</span> Supabase Cloud`;
-  const btnDisc = document.getElementById('btn-disc');
-  if (btnDisc) btnDisc.style.display = 'none';
-  const btnMdb = document.getElementById('btn-mdb');
-  if (btnMdb) btnMdb.style.display = 'none';
-  const dotEl = document.querySelector('.status-dot');
-  if (dotEl) dotEl.style.background = 'var(--green)';
+  if (isMdb) {
+    pathLabel.innerHTML = `<span style="color:var(--green)">●</span> ${mdbPath.split(/[\\\/]/).pop()}`;
+    document.getElementById('btn-disc').style.display = '';
+    document.getElementById('btn-mdb').textContent = '📂 Cambia MDB';
+  } else {
+    pathLabel.innerHTML = `<span style="color:var(--t3)">●</span> Dati locali`;
+    document.getElementById('btn-disc').style.display = 'none';
+    document.getElementById('btn-mdb').textContent = '📂 Apri MDB';
+  }
+  // Colora status dot
+  document.querySelector('.status-dot').style.background = isMdb ? 'var(--green)' : 'var(--amber)';
 }
+
 // ═══════════════════════════════════════════════════
 //  NAVIGATION
 // ═══════════════════════════════════════════════════
@@ -5220,6 +4990,7 @@ function _bilCmpOpenDrillYrSet() {
   });
   const catSorted = Object.entries(byCat).sort((a,b)=>b[1].tot-a[1].tot);
   const maxCat = catSorted.length?catSorted[0][1].tot:1;
+  // Salva contesto per il drill categoria
   _bilCatDrillCtx = { years, months };
   _bilDrillAxisMode = 'years';
 
@@ -5298,6 +5069,7 @@ function _bilCmpOpenDrillYrSet() {
   const bmdi = document.getElementById('modal-drill-inner');
   if (bmdi) bmdi.scrollTop = 0;
   bmd.classList.add('open');
+  // Event delegation per click su categoria
   requestAnimationFrame(() => {
     const drillBody = document.getElementById('drill-body');
     if (drillBody && !drillBody._catClickBound) {
@@ -7754,11 +7526,21 @@ async function saveRecord(tipo, id) {
   }
 
   if (res.success) {
-    // Ricarica sempre da Supabase — fonte di verità, evita inconsistenze in memoria
-    const reload = await window.budgetAPI.loadData();
-    if (reload.success) {
-      DB = reload.data;
-      populateCatFilters();
+    if (res.data) {
+      // MDB connesso: usa i dati ricaricati dal DB (fonte di verità)
+      DB.dati = res.data.dati; DB.datiEntrate = res.data.datiEntrate;
+      if (res.data.categorie) DB.categorie = res.data.categorie;
+      if (res.data.categorieEntrate) DB.categorieEntrate = res.data.categorieEntrate;
+    } else {
+      // Modalità locale: aggiorna manualmente
+      const saved = res.record;
+      if (tipo === 'spesa') {
+        const idx = DB.dati.findIndex(r => r.ID === saved.ID);
+        if (idx >= 0) DB.dati[idx] = saved; else DB.dati.push(saved);
+      } else {
+        const idx = DB.datiEntrate.findIndex(r => r.ID === saved.ID);
+        if (idx >= 0) DB.datiEntrate[idx] = saved; else DB.datiEntrate.push(saved);
+      }
     }
     closeForm();
     renderAll();
@@ -8052,7 +7834,7 @@ function renderInlineForms() {
       <span style="font-size:10px;color:var(--amber);background:rgba(245,161,36,.15);padding:2px 7px;border-radius:10px;font-family:var(--m)">⚡ esclusa dalle previsioni</span>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="inline-sp-save" class="btn-primary" onclick="saveInline('spesa')">+ Aggiungi Spesa</button>
+      <button class="btn-primary" onclick="saveInline('spesa')">+ Aggiungi Spesa</button>
       <button class="btn-secondary" style="font-size:11px" onclick="saveAsPref('spesa')" title="Salva i valori attuali come preferito">⭐ Salva come preferito</button>
     </div>
   `;
@@ -8070,7 +7852,7 @@ function renderInlineForms() {
       <span style="font-size:10px;color:var(--amber);background:rgba(245,161,36,.15);padding:2px 7px;border-radius:10px;font-family:var(--m)">⚡ esclusa dalle previsioni</span>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="inline-en-save" class="btn-primary" style="background:var(--green)" onclick="saveInline('entrata')">+ Aggiungi Entrata</button>
+      <button class="btn-primary" style="background:var(--green)" onclick="saveInline('entrata')">+ Aggiungi Entrata</button>
       <button class="btn-secondary" style="font-size:11px" onclick="saveAsPref('entrata')" title="Salva i valori attuali come preferito">⭐ Salva come preferito</button>
     </div>
   `;
@@ -8093,35 +7875,19 @@ async function saveInline(tipo) {
     showToast('Compila tutti i campi e seleziona una categoria', 'error'); return;
   }
 
-  // Disabilita il pulsante per prevenire doppio click
-  const btnId = tipo === 'spesa' ? 'inline-sp-save' : 'inline-en-save';
-  const saveBtn = document.getElementById(btnId);
-  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Salvataggio...'; }
-
-  try {
-    const record = { Data: data, Descrizione: desc, Importo: importo, IDCategoria: idCat, Note: note };
-    const res = tipo === 'spesa' ? await window.budgetAPI.saveSpesa(record) : await window.budgetAPI.saveEntrata(record);
-    if (res.success) {
-      // Ricarica sempre da Supabase
-      const reload = await window.budgetAPI.loadData();
-      if (reload.success) {
-        DB = reload.data;
-        populateCatFilters();
-      }
-      renderAll();
-      updateStatus('local', null);
-      showToast('Record aggiunto ✓', 'success');
-      document.getElementById(`${prefix}-desc`).value = '';
-      document.getElementById(`${prefix}-importo`).value = '';
-      document.getElementById(`${prefix}-note`).value = '';
-      const _strChk = document.getElementById(tipo==='spesa'?'inline-sp-str':'inline-en-str');
-      if (_strChk) _strChk.checked = false;
-    } else {
-      showToast('Errore nel salvataggio', 'error');
-    }
-  } finally {
-    // Riabilita sempre il pulsante
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = tipo === 'spesa' ? '+ Aggiungi Spesa' : '+ Aggiungi Entrata'; }
+  const record = { Data: data, Descrizione: desc, Importo: importo, IDCategoria: idCat, Note: note };
+  const res = tipo === 'spesa' ? await window.budgetAPI.saveSpesa(record) : await window.budgetAPI.saveEntrata(record);
+  if (res.success) {
+    const saved = res.record;
+    if (tipo === 'spesa') DB.dati.push(saved); else DB.datiEntrate.push(saved);
+    renderAll();
+    updateStatus('local', null);
+    showToast('Record aggiunto ✓', 'success');
+    document.getElementById(`${prefix}-desc`).value = '';
+    document.getElementById(`${prefix}-importo`).value = '';
+    document.getElementById(`${prefix}-note`).value = '';
+    const _strChk = document.getElementById(tipo==='spesa'?'inline-sp-str':'inline-en-str');
+    if (_strChk) _strChk.checked = false;
   }
 }
 
@@ -8377,6 +8143,7 @@ function drillRispSettimanaFull(wkMonday, labelStr) {
 // ═══════════════════════════════════════════════════
 //  DRILL-DOWN (originale)
 // ═══════════════════════════════════════════════════
+// ── Cat Drill: report mesi×anni + trend per singola categoria ──────────────
 // ── Riepilogo sintetico tutte le categorie ────────────────────────────────
 function _bilOpenCatRiepilogo() {
   const years  = _bilCatDrillCtx.years.map(String);
@@ -9413,7 +9180,6 @@ function _bilOpenEnCatDrillP(catNome, periods) {
   modal.classList.add('open');
 }
 
-
 function closeDrill() {
   const modal = document.getElementById('modal-drill');
   // Scroll al top PRIMA di nascondere (display:none blocca scrollTop)
@@ -10395,10 +10161,33 @@ function renderPagination(containerId, current, total, cb) {
 }
 
 function populateCatFilters() {
+  // Salva la selezione corrente prima di ricostruire il dropdown
+  const prevSp = window._spCatSelected ? [...window._spCatSelected] : [];
+  const prevEn = window._enCatSelected ? [...window._enCatSelected] : [];
   window._spCatSelected = [];
   window._enCatSelected = [];
   buildCatDropdown('sp', DB.categorie);
   buildCatDropdown('en', DB.categorieEntrate);
+  // Ripristina la selezione precedente (solo gli ID ancora esistenti)
+  if (prevSp.length) _restoreCatFilter('sp', prevSp);
+  if (prevEn.length) _restoreCatFilter('en', prevEn);
+}
+
+function _restoreCatFilter(ctx, prevIds) {
+  const dd = document.getElementById(ctx + '-cat-dropdown');
+  if (!dd) return;
+  const cats = ctx === 'sp' ? DB.categorie : DB.categorieEntrate;
+  const validIds = new Set(cats.map(c => c.ID));
+  const restored = prevIds.filter(id => validIds.has(id));
+  if (!restored.length) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(i => {
+    if (restored.includes(parseInt(i.value))) i.checked = true;
+  });
+  window[`_${ctx}CatSelected`] = restored;
+  const label = document.getElementById(ctx + '-cat-label');
+  if (label) label.textContent = `${restored.length} categor${restored.length===1?'ia':'ie'}`;
+  const btn = document.getElementById(ctx + '-cat-btn');
+  if (btn) btn.classList.toggle('active', restored.length > 0);
 }
 
 function buildCatDropdown(ctx, cats) {
@@ -10569,7 +10358,7 @@ document.addEventListener("click", function(e) {
     case "act50": showPage('previsioni',self); break;
 
     case "act52": showPage('analisi',self); loadPrevSelectors(); renderAnalisi(); renderIstatEditor(); renderEnGrowthTable(); break;
-    case "act53": showPage('scenari',self); break;
+    case "act53": showPage('scenari',self); _emaRender(); break;
     case "act54": showPage('inflazione',self); renderInflazione(); break;
     case "act55": showPage('bilancio',self); renderBilPersonale(); _bilSyncModoUI(); break;
     case "act56": exportJSON(); break;
@@ -13360,13 +13149,13 @@ function _emaRender() {
       data: flatCumData,
       borderColor: '#4f8ef7', backgroundColor: 'rgba(79,142,247,.07)',
       borderWidth: 2.5, pointRadius: (ctx) => ctx.dataIndex===flatCumData.length-1?6:3,
-      pointHoverRadius: 6, tension: .3, fill: 'origin',
+      pointHoverRadius: 6, tension: .3, fill: true,
       ..._mkDL(flatCumData, '#4f8ef7') },
     { label: 'EMA (' + _emaPresetLabel(_emaAlphaSp) + '/' + _emaPresetLabel(_emaAlphaEn) + ')',
       data: emaCumData,
       borderColor: '#1ecf96', backgroundColor: 'rgba(30,207,150,.07)',
       borderWidth: 2.5, pointRadius: (ctx) => ctx.dataIndex===emaCumData.length-1?6:3,
-      pointHoverRadius: 6, tension: .3, fill: 0,
+      pointHoverRadius: 6, tension: .3, fill: true,
       borderDash: emaCumData[H-1] >= flatCumData[H-1] ? [] : [6,3],
       ..._mkDL(emaCumData, '#1ecf96') },
   ];
@@ -13377,13 +13166,13 @@ function _emaRender() {
       data: prevCumData,
       borderColor: '#7c5cf6', backgroundColor: 'rgba(124,92,246,.07)',
       borderWidth: 2.5, pointRadius: (ctx) => ctx.dataIndex===prevCumData.length-1?6:3,
-      pointHoverRadius: 6, tension: .3, fill: 1,
+      pointHoverRadius: 6, tension: .3, fill: true,
       borderDash: prevCumData[H-1] >= flatCumData[H-1] ? [] : [6,3],
       ..._mkDL(prevCumData, '#7c5cf6')
     });
   }
 
-  const _scChart = makeChart('chart-scenari', {
+  makeChart('chart-scenari', {
     type: 'line',
     data: { labels: futureYears.map(String), datasets },
     options: {
@@ -13409,7 +13198,6 @@ function _emaRender() {
       }
     }
   });
-  if (_scChart) requestAnimationFrame(() => _scChart.resize());
 }
 
 window._emaSetSp = _emaSetSp;
@@ -14503,7 +14291,11 @@ async function confirmInsertPreferiti() {
         const res = pr.tipo === 'spesa'
           ? await window.budgetAPI.saveSpesa(record)
           : await window.budgetAPI.saveEntrata(record);
-        if (res.success) { ok++; } else { err++; }
+        if (res.success) {
+          if (pr.tipo === 'spesa') DB.dati.push(res.record);
+          else DB.datiEntrate.push(res.record);
+          ok++;
+        } else { err++; }
       } catch(e) { err++; }
     }
   }
@@ -14512,9 +14304,6 @@ async function confirmInsertPreferiti() {
   if (btn) { btn.disabled = false; btn.textContent = origText; }
 
   closeInsertPref();
-  // Ricarica da Supabase dopo tutti gli insert
-  const reloadPref = await window.budgetAPI.loadData();
-  if (reloadPref.success) { DB = reloadPref.data; populateCatFilters(); }
   renderAll();
   const st = await window.budgetAPI.getStatus();
   updateStatus(st.connected ? 'mdb' : 'local', st.mdbPath);
@@ -14772,14 +14561,15 @@ async function processIphoneCSV(e) {
       const res = r.tipo === 'spesa'
         ? await window.budgetAPI.saveSpesa(record)
         : await window.budgetAPI.saveEntrata(record);
-      if (res.success) { ok++; } else { err++; }
+      if (res.success) {
+        if (r.tipo === 'spesa') DB.dati.push(res.record);
+        else DB.datiEntrate.push(res.record);
+        ok++;
+      } else { err++; }
     } catch(ex) { err++; }
   }
 
   e.target.value = '';
-  // Ricarica da Supabase dopo tutti gli insert
-  const reloadSync = await window.budgetAPI.loadData();
-  if (reloadSync.success) { DB = reloadSync.data; populateCatFilters(); }
   _buildIdx();
   renderAll();
   const st = await window.budgetAPI.getStatus();
@@ -15137,9 +14927,9 @@ async function desktopDriveDownloadCSV() {
       `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime%20asc`,
       { headers: { Authorization: `Bearer ${_desktopDriveToken}` } }
     );
-    if (resp.status === 401) { _desktopDriveUpdateUI(false); showToast('⚠ Sessione scaduta — riconnetti', 'error'); return; }
+    if (resp.status === 401) { _desktopDriveUpdateUI(false); showToast('⚠ Sessione scaduta — riconnetti', 'error'); if (btn) btn.textContent = origText; return; }
     const data = await resp.json();
-    if (!data.files?.length) { showToast('⚠ Nessun CSV trovato in BudgetDomestico su Drive', 'error'); return; }
+    if (!data.files?.length) { showToast('⚠ Nessun CSV trovato in BudgetDomestico su Drive', 'error'); if (btn) btn.textContent = origText; return; }
 
     if (btn) btn.textContent = origText;
     const files = data.files;
@@ -15177,6 +14967,13 @@ async function desktopDriveDownloadCSV() {
       const enLines=toIns.filter(r=>r.tipo==='entrata').map(r=>'  - '+r.data+'  '+r.desc+'  euro '+r.importo.toFixed(2)).join('\n');
       const delLines=toDel.length ? '\n\nDA CANCELLARE ('+toDel.length+'):\n'+toDel.map(d=>'  - '+d.data+'  '+(d.desc||'(senza descr.)')+'  euro '+d.importo.toFixed(2)).join('\n') : '';
 
+      // Salta il file se non ha nessuna riga da importare né cancellazioni
+      if (!toIns.length && !toDel.length) {
+        await _driveDeleteFile(file.id);
+        discarded++;
+        continue;
+      }
+
       let report = 'Importa da iPhone -- ' + dateStr + '\n';
       if (nSp > 0) report += '\nSPESE (' + nSp + '):\n' + spLines;
       if (nEn > 0) report += '\n\nENTRATE (' + nEn + '):\n' + enLines;
@@ -15210,6 +15007,7 @@ async function desktopDriveDownloadCSV() {
 
   } catch(e) {
     if (e.message !== '401') showToast('❌ Errore Drive: ' + e.message, 'error');
+  } finally {
     if (btn) btn.textContent = origText;
   }
 }
@@ -15400,13 +15198,17 @@ async function _checkAutoInsertPreferiti() {
 
     const recoveryDays = p.recoveryDays || 0;
 
+    // Controlla oggi e i giorni precedenti entro la finestra di recupero
     for (let daysBack = 0; daysBack <= recoveryDays; daysBack++) {
       const checkDate = new Date();
       checkDate.setDate(checkDate.getDate() - daysBack);
       const checkISO = _dateToISO(checkDate);
 
+      // Non recuperare date precedenti alla data di inizio
       if (checkISO < p.dal) break;
+      // Non recuperare date future
       if (checkISO > today) continue;
+      // Se saltato esplicitamente oggi, salta solo oggi
       if (daysBack === 0 && _isSkippedToday(p)) continue;
 
       if (_isAutoInsertDue(p, checkISO)) {
@@ -15417,8 +15219,9 @@ async function _checkAutoInsertPreferiti() {
           Math.abs(r.Importo - p.importo) < 0.01
         );
         if (!alreadyExists) {
+          // Aggiunge con la data originale mancata (non today)
           toInsert.push({ ...p, _recoveryDate: checkISO, _daysBack: daysBack });
-          break;
+          break; // recupera solo la scadenza più recente mancata
         }
       }
     }
@@ -15529,12 +15332,14 @@ async function _autoInsertConfirm() {
       const res = p.tipo === 'spesa'
         ? await window.budgetAPI.saveSpesa(record)
         : await window.budgetAPI.saveEntrata(record);
-      if (res.success) { inserted++; }
+      if (res.success) {
+        if (p.tipo === 'spesa') DB.dati.push(res.record);
+        else DB.datiEntrate.push(res.record);
+        inserted++;
+      }
     } catch(e) {}
   }
   if (inserted > 0) {
-    const reloadAuto = await window.budgetAPI.loadData();
-    if (reloadAuto.success) { DB = reloadAuto.data; populateCatFilters(); }
     renderAll();
     showToast(`✓ ${inserted} record auto-inserit${inserted===1?'o':'i'}`, 'success');
   }
@@ -15548,20 +15353,211 @@ window.toggleSelectAll = toggleSelectAll;
 window.clearMultiSelect = clearMultiSelect;
 window.deleteMultiple = deleteMultiple;
 window._bilOpenCatRiepilogo = _bilOpenCatRiepilogo;
+window._bilCmpSetAllMonths = _bilCmpSetAllMonths;
+window.closeCatRiepilogo = closeCatRiepilogo;
+window._bilOpenCatDrill = _bilOpenCatDrill;
+window.closeCatDrill = closeCatDrill;
 window._bilOpenEnCatRiepilogo = _bilOpenEnCatRiepilogo;
 window.closeEnCatRiepilogo = closeEnCatRiepilogo;
 window._bilOpenEnCatDrill = _bilOpenEnCatDrill;
 window.closeEnCatDrill = closeEnCatDrill;
-window._bilCmpSetAllMonths = _bilCmpSetAllMonths;
-window.closeCatRiepilogo = closeCatRiepilogo;
-window._bilOpenCatDrill = _bilOpenCatDrill;
 window._bilOpenCatRiepilogoP = _bilOpenCatRiepilogoP;
 window._bilOpenCatDrillP = _bilOpenCatDrillP;
 window._bilOpenEnCatRiepilogoP = _bilOpenEnCatRiepilogoP;
 window._bilOpenEnCatDrillP = _bilOpenEnCatDrillP;
-window.closeCatDrill = closeCatDrill;
 
-init().then(() => { initNavWidgets(); });
+// ═══════════════════════════════════════════════════
+//  MODIFICA MASSIVA — bulk edit su selezione multipla
+// ═══════════════════════════════════════════════════
+let _bulkEditCtx = null; // 'sp' | 'en'
+
+function openBulkEdit(ctx) {
+  const sel = ctx === 'sp' ? window._spSelected : window._enSelected;
+  if (!sel || !sel.size) return;
+  _bulkEditCtx = ctx;
+  const tipo = ctx === 'sp' ? 'spesa' : 'entrata';
+  const cats = tipo === 'spesa' ? DB.categorie : DB.categorieEntrate;
+
+  document.getElementById('bulk-edit-subtitle').textContent =
+    sel.size + ' record selezionat' + (sel.size===1?'o':'i') + ' — compila solo i campi da modificare';
+
+  const catOpts = '<option value="" selected>— invariata —</option>' +
+    cats.map(c => '<option value="' + c.ID + '">' + c.Nome + '</option>').join('');
+
+  document.getElementById('bulk-edit-fields').innerHTML =
+    '<div class="form-group">' +
+      '<label class="form-label">Data</label>' +
+      '<input type="date" class="form-ctrl" id="bulk-data" value="">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Descrizione</label>' +
+      '<input type="text" class="form-ctrl" id="bulk-desc" value="" placeholder="Lascia vuoto per non modificare">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Importo (\u20ac)</label>' +
+      '<input type="number" class="form-ctrl" id="bulk-importo" value="" step="0.01" min="0" placeholder="Lascia vuoto per non modificare">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Categoria</label>' +
+      '<select class="form-ctrl" id="bulk-cat">' + catOpts + '</select>' +
+    '</div>' +
+    '<div class="form-group" style="grid-column:1/-1">' +
+      '<label class="form-label">Note <span style="font-size:10px;color:var(--t3)">(lascia vuoto per non modificare)</span></label>' +
+      '<input type="text" class="form-ctrl" id="bulk-note" value="" placeholder="Lascia vuoto per non modificare" oninput="this.dataset.modified=\'1\'">' +
+    '</div>';
+
+  document.getElementById('modal-bulk-edit').classList.add('open');
+}
+
+function closeBulkEdit() {
+  document.getElementById('modal-bulk-edit').classList.remove('open');
+  _bulkEditCtx = null;
+}
+
+async function applyBulkEdit() {
+  if (!_bulkEditCtx) return;
+  const ctx = _bulkEditCtx;
+  const tipo = ctx === 'sp' ? 'spesa' : 'entrata';
+  const sel = ctx === 'sp' ? window._spSelected : window._enSelected;
+  if (!sel || !sel.size) return;
+
+  const newData     = document.getElementById('bulk-data').value;
+  const newDesc     = document.getElementById('bulk-desc').value.trim();
+  const newImportoS = document.getElementById('bulk-importo').value;
+  const newCat      = document.getElementById('bulk-cat').value;
+  const noteEl      = document.getElementById('bulk-note');
+  const newNote     = noteEl.value;
+  const noteModified = noteEl.dataset.modified === '1';
+
+  const hasData    = !!newData;
+  const hasDesc    = !!newDesc;
+  const hasImporto = newImportoS !== '' && !isNaN(parseFloat(newImportoS)) && parseFloat(newImportoS) > 0;
+  const hasCat     = !!newCat;
+
+  if (!hasData && !hasDesc && !hasImporto && !hasCat && !noteModified) {
+    showToast('Nessun campo da modificare compilato', 'error'); return;
+  }
+
+  const ids = Array.from(sel);
+  const ok = await _confirmDialog({
+    title: 'Modifica massiva',
+    msg: 'Applicare le modifiche a ' + ids.length + ' record? L\u2019operazione non \u00e8 reversibile.',
+    ok: 'Applica',
+    icon: '\u270f\ufe0f',
+    danger: false
+  });
+  if (!ok) return;
+
+  closeBulkEdit();
+
+  let updated = 0;
+  for (const id of ids) {
+    const dbArr = tipo === 'spesa' ? DB.dati : DB.datiEntrate;
+    const record = dbArr.find(r => r.ID === id);
+    if (!record) continue;
+    const patch = Object.assign({}, record);
+    if (hasData)     patch.Data        = newData;
+    if (hasDesc)     patch.Descrizione = newDesc;
+    if (hasImporto)  patch.Importo     = parseFloat(newImportoS);
+    if (hasCat)      patch.IDCategoria = parseInt(newCat);
+    if (noteModified) patch.Note       = newNote;
+
+    try {
+      const res = tipo === 'spesa'
+        ? await window.budgetAPI.saveSpesa(patch)
+        : await window.budgetAPI.saveEntrata(patch);
+      if (res.success) {
+        if (res.data) {
+          DB.dati = res.data.dati;
+          DB.datiEntrate = res.data.datiEntrate;
+          if (res.data.categorie) DB.categorie = res.data.categorie;
+          if (res.data.categorieEntrate) DB.categorieEntrate = res.data.categorieEntrate;
+        } else {
+          const saved = res.record;
+          if (saved) {
+            const arr = tipo === 'spesa' ? DB.dati : DB.datiEntrate;
+            const idx = arr.findIndex(r => r.ID === saved.ID);
+            if (idx >= 0) arr[idx] = saved;
+          }
+        }
+        updated++;
+      }
+    } catch(e) { console.error('bulkEdit error', id, e); }
+  }
+
+  if (ctx === 'sp') window._spSelected = new Set();
+  else window._enSelected = new Set();
+  _updateMultiBar(ctx);
+  populateCatFilters();
+  renderAll();
+  const st = await window.budgetAPI.getStatus();
+  updateStatus(st.connected ? 'mdb' : 'local', st.mdbPath);
+  showToast('\u270f\ufe0f ' + updated + ' record aggiornati' + (st.connected ? ' + MDB \u2713' : ''), 'success');
+}
+
+window.openBulkEdit = openBulkEdit;
+window.closeBulkEdit = closeBulkEdit;
+
+// ═══════════════════════════════════════════════════
+//  IMPORT / EXPORT SETTINGS (compatibile con web)
+// ═══════════════════════════════════════════════════
+const _EL_SETTINGS_EXCLUDE = [
+  'desktop_drive_token',
+  'budget_drive_imported_csv_ids',
+  'budget_deleted_ids_blacklist',
+  'budget_deleted_ids_log',
+  'budget_preferiti'  // ID categorie non compatibili tra Electron (Access) e web (Supabase)
+];
+
+function exportSettingsElectron() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!_EL_SETTINGS_EXCLUDE.includes(k)) data[k] = localStorage.getItem(k);
+  }
+  if (!Object.keys(data).length) { showToast('\u26a0 Nessuna impostazione da salvare', 'error'); return; }
+  const blob = new Blob([JSON.stringify({type:'budget-settings',v:1,savedAt:new Date().toISOString(),data}, null, 2)],
+                        {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'budget-settings-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('\u2713 Settings esportati (' + Object.keys(data).length + ' chiavi)', 'success');
+}
+
+function importSettingsElectron(el) {
+  const file = el.files[0];
+  el.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      const data = parsed.type === 'budget-settings' ? parsed.data : parsed;
+      if (!data || typeof data !== 'object') { showToast('\u26a0 File non valido', 'error'); return; }
+      const keys = Object.keys(data).filter(k => !_EL_SETTINGS_EXCLUDE.includes(k));
+      const ok = await _confirmDialog({
+        title: 'Importa impostazioni',
+        msg: 'Ripristinare ' + keys.length + ' impostazioni dal file?\nLe impostazioni attuali verranno sovrascritte.',
+        ok: 'Importa',
+        icon: '\u2b06\ufe0f',
+        danger: false
+      });
+      if (!ok) return;
+      keys.forEach(k => localStorage.setItem(k, data[k]));
+      showToast('\u2713 ' + keys.length + ' impostazioni importate — ricarica la pagina', 'success');
+    } catch { showToast('\u26a0 Errore lettura file', 'error'); }
+  };
+  reader.readAsText(file);
+}
+
+window.exportSettingsElectron = exportSettingsElectron;
+window.importSettingsElectron = importSettingsElectron;
+window.applyBulkEdit = applyBulkEdit;
+window._confirmDialog = _confirmDialog;
+
+init().then(() => { initNavWidgets(); setTimeout(_checkAutoInsertPreferiti, 1200); });
 </script>
 <!-- Google Identity Services — per Drive Sync desktop -->
 <script>
