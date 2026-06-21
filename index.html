@@ -13360,13 +13360,13 @@ function _emaRender() {
       data: flatCumData,
       borderColor: '#4f8ef7', backgroundColor: 'rgba(79,142,247,.07)',
       borderWidth: 2.5, pointRadius: (ctx) => ctx.dataIndex===flatCumData.length-1?6:3,
-      pointHoverRadius: 6, tension: .3, fill: true,
+      pointHoverRadius: 6, tension: .3, fill: 'origin',
       ..._mkDL(flatCumData, '#4f8ef7') },
     { label: 'EMA (' + _emaPresetLabel(_emaAlphaSp) + '/' + _emaPresetLabel(_emaAlphaEn) + ')',
       data: emaCumData,
       borderColor: '#1ecf96', backgroundColor: 'rgba(30,207,150,.07)',
       borderWidth: 2.5, pointRadius: (ctx) => ctx.dataIndex===emaCumData.length-1?6:3,
-      pointHoverRadius: 6, tension: .3, fill: true,
+      pointHoverRadius: 6, tension: .3, fill: 0,
       borderDash: emaCumData[H-1] >= flatCumData[H-1] ? [] : [6,3],
       ..._mkDL(emaCumData, '#1ecf96') },
   ];
@@ -13377,7 +13377,7 @@ function _emaRender() {
       data: prevCumData,
       borderColor: '#7c5cf6', backgroundColor: 'rgba(124,92,246,.07)',
       borderWidth: 2.5, pointRadius: (ctx) => ctx.dataIndex===prevCumData.length-1?6:3,
-      pointHoverRadius: 6, tension: .3, fill: true,
+      pointHoverRadius: 6, tension: .3, fill: 1,
       borderDash: prevCumData[H-1] >= flatCumData[H-1] ? [] : [6,3],
       ..._mkDL(prevCumData, '#7c5cf6')
     });
@@ -13410,6 +13410,12 @@ function _emaRender() {
     }
   });
   if (_scChart) requestAnimationFrame(() => _scChart.resize());
+  if (!window._scResizeListenerAdded) {
+    window._scResizeListenerAdded = true;
+    window.addEventListener('resize', () => {
+      if (charts['chart-scenari']) charts['chart-scenari'].resize();
+    });
+  }
 }
 
 window._emaSetSp = _emaSetSp;
