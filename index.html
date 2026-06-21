@@ -13413,19 +13413,25 @@ function _emaRender() {
   // un'altezza definitiva (flex layout appena reso visibile) — Chart.js a volte
   // disegna su un'area collassata (asse Y assente, linee piatte sullo €0).
   // Un doppio requestAnimationFrame garantisce che il layout sia stabile prima
-  // di forzare un resize + ridisegno completo.
+  // di forzare un resize + ridisegno completo. Controlliamo che il chart sia
+  // ancora quello corrente (non distrutto/sostituito) e che il canvas sia
+  // ancora collegato al documento, per evitare crash se nel frattempo l'utente
+  // ha cambiato tab o _emaRender è stato richiamato.
   if (_scChart) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        _scChart.resize();
-        _scChart.update('none');
+        if (charts['chart-scenari'] === _scChart && _scChart.canvas && _scChart.canvas.isConnected) {
+          _scChart.resize();
+          _scChart.update('none');
+        }
       });
     });
   }
   if (!window._scResizeListenerAdded) {
     window._scResizeListenerAdded = true;
     window.addEventListener('resize', () => {
-      if (charts['chart-scenari']) charts['chart-scenari'].resize();
+      const c = charts['chart-scenari'];
+      if (c && c.canvas && c.canvas.isConnected) c.resize();
     });
   }
 }
