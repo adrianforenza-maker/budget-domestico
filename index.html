@@ -13383,7 +13383,7 @@ function _emaRender() {
     });
   }
 
-  makeChart('chart-scenari', {
+  const _scChart = makeChart('chart-scenari', {
     type: 'line',
     data: { labels: futureYears.map(String), datasets },
     options: {
@@ -13409,6 +13409,7 @@ function _emaRender() {
       }
     }
   });
+  if (_scChart) requestAnimationFrame(() => _scChart.resize());
 }
 
 window._emaSetSp = _emaSetSp;
