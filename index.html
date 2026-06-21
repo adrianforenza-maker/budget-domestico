@@ -1360,7 +1360,7 @@ input[type=date].form-ctrl::-webkit-calendar-picker-indicator{filter:invert(0.7)
       <span id="sc-chart-title" style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Risparmio Cumulato — Flat vs EMA vs Previsioni</span>
       <span id="sc-hasTassi-badge" style="font-size:10px;padding:2px 8px;border-radius:6px;display:none"></span>
     </div>
-    <div style="flex:1;min-height:0"><canvas id="chart-scenari"></canvas></div>
+    <div style="flex:1;min-height:180px;position:relative"><canvas id="chart-scenari"></canvas></div>
   </div>
 
 </div>
@@ -13383,7 +13383,7 @@ function _emaRender() {
     });
   }
 
-  makeChart('chart-scenari', {
+  const _scChart = makeChart('chart-scenari', {
     type: 'line',
     data: { labels: futureYears.map(String), datasets },
     options: {
@@ -13409,6 +13409,25 @@ function _emaRender() {
       }
     }
   });
+  // Fix: al primo render del tab Scenari il container può non avere ancora
+  // un'altezza definitiva (flex layout appena reso visibile) — Chart.js a volte
+  // disegna su un'area collassata (asse Y assente, linee piatte sullo €0).
+  // Un doppio requestAnimationFrame garantisce che il layout sia stabile prima
+  // di forzare un resize + ridisegno completo.
+  if (_scChart) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        _scChart.resize();
+        _scChart.update('none');
+      });
+    });
+  }
+  if (!window._scResizeListenerAdded) {
+    window._scResizeListenerAdded = true;
+    window.addEventListener('resize', () => {
+      if (charts['chart-scenari']) charts['chart-scenari'].resize();
+    });
+  }
 }
 
 window._emaSetSp = _emaSetSp;
