@@ -13389,7 +13389,7 @@ function _emaRender() {
     options: {
       ...chartDefaults(),
       animation: { duration: 0 },
-      layout: { padding: { top: 28, right: 20 } },
+      layout: { padding: { top: 28, right: 20, left: 8, bottom: 4 } },
       plugins: {
         ...chartDefaults().plugins,
         legend: {
@@ -13415,6 +13415,21 @@ function _emaRender() {
     window.addEventListener('resize', () => {
       if (charts['chart-scenari']) charts['chart-scenari'].resize();
     });
+    // Fix: lo zoom del browser cambia window.devicePixelRatio senza necessariamente
+    // far scattare un ResizeObserver sul container (le dimensioni CSS non cambiano),
+    // lasciando il canvas disegnato al DPR precedente — il fill sotto le curve
+    // appare "tagliato"/disallineato. Ci agganciamo esplicitamente al cambio di DPR
+    // tramite matchMedia e forziamo resize + ridisegno completo.
+    const _scWatchDPR = () => {
+      if (charts['chart-scenari']) {
+        charts['chart-scenari'].resize();
+        charts['chart-scenari'].update('none');
+      }
+      // matchMedia va re-iscritto ad ogni variazione di DPR
+      const mq = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      mq.addEventListener('change', _scWatchDPR, { once: true });
+    };
+    _scWatchDPR();
   }
 }
 
