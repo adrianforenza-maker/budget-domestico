@@ -13390,6 +13390,11 @@ function _emaRender() {
       ...chartDefaults(),
       animation: { duration: 0 },
       layout: { padding: { top: 28, right: 20 } },
+      scales: {
+        ...chartDefaults().scales,
+        x: { ...chartDefaults().scales.x },
+        y: { ...chartDefaults().scales.y }
+      },
       plugins: {
         ...chartDefaults().plugins,
         legend: {
